@@ -1,4 +1,3 @@
-import json
 import logging
 import sys
 import os
@@ -7,6 +6,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.db.aact_client import AACTClient
+from src.db.neo4j_client import Neo4jClient
 from src.processing.data_cleaner import DataCleaner
 
 # Configure logging
@@ -16,49 +16,54 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def run_pipeline_dry_run(limit=1000, output_file='processed_data.json'):
+def run_pipeline(limit=1000, batch_size=500):
     """
-    Orchestrates Extract -> Transform -> Load (to File).
+    Orchestrates Extract -> Transform -> Load into Neo4j.
     """
-    logger.info("Starting Pipeline Dry Run...")
+    logger.info("Starting ETL Pipeline (AACT -> Neo4j)...")
     
-    # 1. Initialize Components
-    client = AACTClient()
+    aact_client = AACTClient()
     cleaner = DataCleaner()
-    
-    processed_records = []
-    
-    try:
-        # 2. Extract
-        logger.info("Step 1: Extracting data from AACT...")
-        raw_trials = client.fetch_trials()
-        
-        # 3. Transform
-        logger.info("Step 2: Transforming and Cleaning data...")
-        count = 0
-        for raw_trial in raw_trials:
-            count += 1
-            if count > limit:
-                break
-                
-            clean_trial = cleaner.clean_study(raw_trial)
-            processed_records.append(clean_trial)
-            
-            if count % 100 == 0:
-                logger.info(f"Processed {count} records...")
+    neo_client = Neo4jClient()
 
-        # 4. Load (to Stdout for capture)
-        # Using stderr for logs so stdout is pure JSON
-        logger.info(f"Step 3: Outputting {len(processed_records)} records to stdout...", extra={'stream': sys.stderr})
-        print(json.dumps(processed_records, indent=2))
-            
-        logger.info("Pipeline Dry Run Completed Successfully.")
-        
+    # Ensure schema/constraints exist
+    neo_client.setup_schema()
+
+    try:
+        raw_trials = aact_client.fetch_trials()
+
+        batch = []
+        processed = 0
+
+        for raw_trial in raw_trials:
+            processed += 1
+            if processed > limit:
+                break
+
+            clean_trial = cleaner.clean_study(raw_trial)
+            batch.append(clean_trial)
+
+            if processed % 100 == 0:
+                logger.info(f"Processed {processed} records...")
+
+            # Flush batch to Neo4j
+            if len(batch) >= batch_size:
+                neo_client.load_batch(batch)
+                batch = []
+
+        # Load remaining
+        if batch:
+            neo_client.load_batch(batch)
+
+        logger.info(f"Pipeline completed successfully. Total processed: {processed}")
+
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
         sys.exit(1)
+    finally:
+        neo_client.close()
 
 if __name__ == "__main__":
-    # Suppress lower level logs to keep stderr clean
+    # Optional: suppress overly verbose logs from submodules if needed
     logging.getLogger('src.db.aact_client').setLevel(logging.WARNING)
-    run_pipeline_dry_run()
+    run_pipeline()
