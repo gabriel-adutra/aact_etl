@@ -11,21 +11,26 @@ class Neo4jClient:
         user = os.getenv("NEO4J_USER", "neo4j")
         password = os.getenv("NEO4J_PASSWORD", "password")
         
+        self.driver = self._create_driver(uri, user, password)
+        
+
+    def _create_driver(self, uri: str, user: str, password: str):
         try:
-            self.driver = GraphDatabase.driver(uri, auth=(user, password))
-            self.driver.verify_connectivity()
+            driver = GraphDatabase.driver(uri, auth=(user, password))
+            driver.verify_connectivity()
             logger.info(f"Connected to Neo4j at {uri}")
+            return driver
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}")
             raise
-
+        
 
     def close_connection(self):
         if self.driver:
             self.driver.close()
 
 
-    def ensure_schema(self): 
+    def ensure_graph_schema(self):
         queries = [
             # Constraints (Uniqueness)
             "CREATE CONSTRAINT trial_nct_id IF NOT EXISTS FOR (t:Trial) REQUIRE t.nct_id IS UNIQUE",
