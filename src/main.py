@@ -25,34 +25,19 @@ def run_pipeline(limit=1000, batch_size=500):
     data_cleaner = DataCleaner()
     neo4j_client = Neo4jClient()
 
-    neo4j_client.ensure_schema()
+    neo4j_client.ensure_graph_schema()
+
+    total_processed = 0
 
     try:
-        trials_stream = aact_client.fetch_trials() # Generator of raw trials
+        trials_stream = aact_client.fetch_trials() #just creates a generator of dictionaries
 
-        batch = []
-        processed = 0
+        for clean_batch in transform_batches(trials_stream, data_cleaner, batch_size, limit):
+            if clean_batch:
+                neo4j_client.load_trials_batch(clean_batch)
+                total_processed += len(clean_batch)
 
-        for raw_trial in trials_stream:
-            processed += 1
-            if processed > limit:
-                break
-
-            clean_trial = data_cleaner.clean_study(raw_trial)
-            batch.append(clean_trial)
-
-            if processed % 100 == 0:
-                logger.info(f"Processed {processed} records...")
-
-            if len(batch) >= batch_size:
-                neo4j_client.load_trials_batch(batch)
-                batch = []
-
-        # Load remaining
-        if batch:
-            neo4j_client.load_trials_batch(batch)
-
-        logger.info(f"Pipeline completed successfully. Total processed: {processed}")
+        logger.info(f"Pipeline completed successfully. Total processed: {total_processed}")
 
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
@@ -60,7 +45,28 @@ def run_pipeline(limit=1000, batch_size=500):
     finally:
         neo4j_client.close_connection()
 
+
+
+def transform_batches(trials_stream, data_cleaner: DataCleaner, batch_size: int, limit: int):
+    batch = []
+    processed = 0
+
+    for raw_trial in trials_stream:
+        processed += 1
+        if processed > limit:
+            break
+
+        clean_trial = data_cleaner.clean_study(raw_trial)
+        batch.append(clean_trial)
+
+        if len(batch) >= batch_size:
+            yield batch
+            batch = []
+
+    if batch:
+        yield batch
+
+
 if __name__ == "__main__":
-    # Optional: suppress overly verbose logs from submodules if needed
     logging.getLogger('src.db.aact_client').setLevel(logging.WARNING)
     run_pipeline()
