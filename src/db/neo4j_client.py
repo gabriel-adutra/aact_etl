@@ -13,7 +13,6 @@ class Neo4jClient:
         
         try:
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
-            # Verify connectivity
             self.driver.verify_connectivity()
             logger.info(f"Connected to Neo4j at {uri}")
         except Exception as e:

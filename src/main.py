@@ -16,6 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
 def run_pipeline(limit=1000, batch_size=500):
 
     logger.info("Starting ETL Pipeline (AACT -> Neo4j)...")
@@ -24,11 +25,10 @@ def run_pipeline(limit=1000, batch_size=500):
     data_cleaner = DataCleaner()
     neo4j_client = Neo4jClient()
 
-    # Ensure schema/constraints exist
     neo4j_client.ensure_schema()
 
     try:
-        trials_stream = aact_client.fetch_trials()
+        trials_stream = aact_client.fetch_trials() # Generator of raw trials
 
         batch = []
         processed = 0

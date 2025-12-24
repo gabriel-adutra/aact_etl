@@ -17,6 +17,7 @@ class AACTClient:
             "user": os.getenv("AACT_USER"),
             "password": os.getenv("AACT_PASSWORD"),
         }
+
         
     def _get_connection(self):
         try:
@@ -25,11 +26,8 @@ class AACTClient:
             logger.error(f"Failed to connect to AACT Database: {e}")
             raise
 
+
     def fetch_trials(self, query_path: str = "config/extract_trials.sql") -> Generator[Dict[str, Any], None, None]:
-        """
-        Executes the extraction query and yields results row by row.
-        Reads file from disk and executes via psycopg2.
-        """
         if not os.path.exists(query_path):
             raise FileNotFoundError(f"Query file not found at: {query_path}")
 
