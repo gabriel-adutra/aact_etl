@@ -1,13 +1,17 @@
 # ClinicalTrials.gov → Neo4j (AACT ETL)
 
 ## Sobre o Projeto
-Este serviço Python assíncrono (contenizado) realiza um ETL completo a partir do AACT (PostgreSQL público do ClinicalTrials.gov) para Neo4j, consolidando estudos clínicos, drogas, condições e patrocinadores. O fluxo contempla:
-- Ingestão relacional (AACT) com query parametrizada e agregação (`json_agg`) para evitar “explosão de joins”.
-- Transformação e normalização (limpeza de texto + inferência leve de rota/dosagem via regras).
-- Carga em lote no Neo4j, com constraints/indexes para garantir idempotência e performance.
-- Consultas Cypher de demonstração para validar o grafo.
+Este repositório implementa um pipeline ETL completo, idempotente e conteinerizado que extrai dados clínicos do AACT (PostgreSQL público do ClinicalTrials.gov), transforma e enriquece as informações, e carrega tudo em um grafo Neo4j. O objetivo é oferecer um modelo útil para exploração de:
+
+- Ensaios clínicos (Trial)
+- Drogas/Intervenções (Drug)
+- Condições/Doenças (Condition)
+- Patrocinadores/Organizações (Organization)
+- Via de administração e forma farmacêutica (como propriedades na relação Trial–Drug)
 
 ## Arquitetura (Separação de Responsabilidades)
+A arquitetura do pipeline foi desenhada para refletir separação de responsabilidades, configurabilidade e idempotência, alinhada ao que o desafio valoriza (“pipeline bem arquitetado”, “config-driven”, “batching/backpressure”, “idempotent loads”). Essa organização segue a diretriz de “estrutura clara”: cada módulo tem uma única missão (ler, processar, carregar, orquestrar), e as regras/queries ficam em config para facilitar ajustes sem tocar código.
+
 
 ### Módulos principais
 - `config/extract_trials.sql` — Query única e declarativa de extração (AACT → JSON agregado por estudo).
@@ -22,31 +26,41 @@ Este serviço Python assíncrono (contenizado) realiza um ETL completo a partir 
 ### Características do Sistema
 - **Batch & Idempotente:** MERGE em todas as entidades; repetir o ETL não duplica dados.
 - **Config‑driven:** SQL, regras de texto e variáveis sensíveis em arquivos dedicados (`.env`).
-- **Leve & Reprodutível:** Rule‑based NLP em vez de LLM/NER pesado; imagem Docker enxuta.
-- **Resiliente:** Constraints e índices aplicados automaticamente; logs claros de progresso.
+- **Leve & Reprodutível:** Rule‑based NLP em vez de LLM/NER pesado. Imagem Docker enxuta.
+- **Resiliente:** Constraints e índices aplicados automaticamente. Logs claros de progresso.
+
 
 ## Decisões e Racional
 
-1) **Fonte AACT direta (Postgres público) vs. dump de 2GB**
-   - Evita versionar/baixar binários enormes; experiência “clone & run”.
+1) **Fonte AACT direta (Postgres público) vs. dump local (2GB)**
+   - Opções consideradas:
+     - Baixar o dump (2GB), subir um Postgres local e carregar via `pg_restore`.
+     - Montar um container Postgres que baixe e restaure o dump em build.
+     - Conectar direto ao Postgres público do AACT (Playground).
+   - Rejeitamos dump/local porque: aumenta tempo de build, exige versionar/baixar binário grande, e congela dados (perde atualizações).
+   - Escolhemos o Postgres público: é a “fonte oficial”, zero binários versionados, sempre dados atuais e experiência “clone & run” via Docker Compose (apenas credenciais no `.env`).
 
-2) **Query relacional → JSON agregado**
-   - `json_agg` no Postgres entrega 1 estudo com listas de drogas/condições/patrocinadores, evitando reagrupamento manual no Python.
+2) **Query relacional → JSON agregado (AACT)**
+   - Alternativas: juntar no Python (mais I/O, mais lógica) ou agregar já no banco.
+   - Escolha: usar `json_agg` no Postgres para devolver 1 linha por estudo com listas de drogas/condições/patrocinadores, reduzindo transferência e evitando reagrupamento manual. Mantém a transformação declarativa e versionada em SQL.
 
-3) **Inferência de rota/dosagem via regras simples**
-   - Vantagens: leve, offline, explicável.  
-   - Limitação: cobertura baixa quando não há texto rico; muitos `Unknown`.  
-   - Futuro: NER/LLM (BioBERT/SciSpacy) ou analisar também o nome da droga para hints de forma/rota.
+3) **Inferência de rota/dosagem por palavras‑chave (regras)**
+   - Alternativas: LLM/NER (maior recall, custo/peso maiores) ou heurísticas simples. Inclui opções gerenciadas como Databricks AI Query, que facilitam mas dependem de cloud, custo e latência.
+   - Escolha: regras no `config/text_rules.yaml`, porque são leves, auditáveis e reprodutíveis em ambiente Docker enxuto; aderem ao espírito do desafio (não construir um “Google Healthcare”, mas uma abordagem razoável e documentada).
+   - Limitação: descrições pobres geram `Unknown` (~5% rota, ~1% forma em 1000 trials). Documentado como risco conhecido. Futuro: NER/LLM (BioBERT/SciSpacy), AI Query gerenciado (ex.: Databricks) ou hints no nome da droga, se aceitarmos custo/complexidade adicionais.
 
-4) **Incluir DRUG e BIOLOGICAL**
-   - Abrange small molecules e biológicos; evita perder ensaios de vacinas/anticorpos.  
-   - Documentado no README para justificar a definição de “Clinical‑stage drugs”.
+4) **Intervention types: DRUG e BIOLOGICAL**
+   - Alternativas: só DRUG (perde vacinas/anticorpos) ou incluir ambos.
+   - Escolha: incluir DRUG e BIOLOGICAL para cobrir small molecules, vacinas e biológicos, atendendo melhor ao critério “clinical‑stage drugs”.
+   - Documentado para justificar a definição e evitar lacunas nos resultados.
 
 5) **Placebo mantido**
-   - Fidelidade à fonte. Poderia filtrar, mas manter facilita auditoria e evita decisões de negócio implícitas.
+   - Alternativas: filtrar placebo na extração ou na carga.
+   - Escolha: manter para fidelidade à fonte e para não embutir regra de negócio; facilita auditoria. Se o avaliador quiser filtrar, é um ajuste simples na SQL.
 
 6) **Normalização de nomes com `.title()`**
-   - Simples e suficiente para o escopo; pode “simplificar” acrônimos (dnaJ → Dnaj). Limitação registrada.
+   - Alternativas: pipelines de normalização avançados (sinônimos, stemming) ou manter bruto.
+   - Escolha: `.title()` para reduzir variação trivial com custo baixo. Risco: acrônimos podem ser alterados (dnaJ → Dnaj); limitação registrada. Futuro: lista de exceções/sinônimos se necessário.
 
 ## Como o Sistema Funciona
 
@@ -286,14 +300,25 @@ docker compose run --rm etl python src/main.py
 - `.title()` simplifica acrônimos (dnaJ → Dnaj); aceitamos essa limitação para reduzir variações triviais. Futuro: lista de exceções/sinônimos para acrônimos conhecidos.
 - Ao iniciar, o Neo4j pode avisar que constraints/índices já existem; é esperado e demonstra a idempotência da criação de schema (`IF NOT EXISTS`).
 
-### Trade-offs de Inferência (rota/forma)
-- AI Query / Databricks end-to-end: maior cobertura potencial e facilidades gerenciadas; porém depende de cloud, tem custo/latência e foge da leveza/reprodutibilidade local.
-- Modelos locais (BioBERT/SciSpacy): melhor recall que regras; mas aumentam a imagem (GB), o tempo de build e a complexidade operacional.
-- Abordagem atual (rule-based): leve, offline, transparente e fácil de auditar; menor recall, mas alinhada ao “reasonable approach” do desafio e mantendo a imagem enxuta.
+
+## Exemplos de Saída (queries no Neo4j)
+- Top drugs (1000 trials):
+  - Zidovudine 122, Didanosine 54, Buprenorphine 42, Lamivudine 34, Stavudine 32, Zalcitabine 20, Indinavir Sulfate 20, Nevirapine 19, Rgp120/Hiv-1 Sf-2 18, Ritonavir 18.
+- Por empresa (Novartis):
+  - Drugs: Rivastigmine; Conditions: Alzheimer Disease, Cognition Disorders.
+- Por condição (Alzheimer Disease):
+  - Drogas (todas PHASE3, trial_count mostrado): Estrogen (2), Galantamine (1), Donepezil (1), Vitamin E (1), Trazodone (1), Haloperidol (1), Rivastigmine (1), Prednisone (1), Estrogen And Progesterone (1), Melatonin (1).
+- Cobertura rota/dosagem (1000 trials → 1.645 relações Trial–Drug):
+  - with_route: 79 (~5%); with_dosage_form: 21 (~1%). Baixa cobertura devido a descrições pobres; documentado como limitação da abordagem rule-based.
 
 ## Próximos Passos (se houvesse mais tempo)
 - Usar NER/LLM (ex.: BioBERT/SciSpacy) para melhorar inferência de rota/dosagem.
 - Enriquecer normalização de nomes (tabelas de sinônimos, remoção de sufixos “Tablet”, “Injection” do nome sem afetar identidade).
 - Métricas automáticas (quantos nós/arestas criados, coverage de campos).
 - Incremental ingestion (delta) e workflow (Airflow/Prefect).
+
+### Trade-offs de Inferência (rota/forma)
+- AI Query / Databricks end-to-end: maior cobertura potencial e facilidades gerenciadas; porém depende de cloud, tem custo/latência e foge da leveza/reprodutibilidade local.
+- Modelos locais (BioBERT/SciSpacy): melhor recall que regras; mas aumentam a imagem (GB), o tempo de build e a complexidade operacional.
+- Abordagem atual (rule-based): leve, offline, transparente e fácil de auditar; menor recall, mas alinhada ao “reasonable approach” do desafio e mantendo a imagem enxuta.
 
