@@ -38,16 +38,15 @@ class AACTClient:
         logger.info("Connected to AACT. Executing extraction query...")
         
         try:
-            # Using RealDictCursor to get dictionary-like objects
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(sql)
                 
                 total_fetched = 0
                 while True:
-                    rows = cur.fetchmany(size=500) # Fetch in batches from DB cursor
+                    rows = cur.fetchmany(size=500)
                     if not rows:
                         break
-                    
+
                     for row in rows:
                         yield dict(row)
                         
