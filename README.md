@@ -179,6 +179,41 @@ docker compose run --rm etl python src/main.py
 - **Placebo como droga:** Mantido conforme fonte; decisão de negócio poderia filtrar, mas preservamos fidelidade aos dados.
 - **Normalização de nomes:** `.title()` pode simplificar acrônimos (ex: dnaJ → Dnaj). Documentado como limitação aceitável.
 
+
+## Deep Dive: O Desafio da Extração de Entidades
+
+A inferência de rota e forma farmacêutica em texto livre do ClinicalTrials.gov é difícil por falta de padronização. A estratégia escolhida é uma linha de base deliberada, priorizando precisão e transparência em detrimento de recall. A “escada” de evolução possível:
+
+- **Nível 1 (atual) — Heurísticas / Keywords (rules):** baixo custo, determinístico, auditável; roda em segundos no Docker. Cobertura limitada porque muitas descrições trazem só o nome da droga. Preferimos `Unknown` a falsos positivos.
+- **Nível 2 — Regex estruturado:** descartado aqui porque as descrições não seguem padrão fixo (ordem de dose/droga varia, texto é esparso).
+- **Nível 3 — NLP biomédico (SciSpacy/BioBERT):** maior recall sem depender de palavras exatas; custo de imagem/build maior e mais dependências.
+- **Nível 4 — LLMs/AI Functions (GPT-4, Llama-3 via Databricks ou local):** melhor assertividade potencial, mas traz custo, latência e requer validação humana (human-in-the-loop) e governança.
+
+Posicionamento: mantivemos o Nível 1 para cumprir o desafio com leveza, reprodutibilidade e clareza. Próximos passos naturais seriam experimentar Nível 3 (modelos biomédicos) ou Nível 4 (LLM) se aceitarmos maior custo/complexidade em troca de maior recall.
+
+## Diagrama (Visão Geral)
+```mermaid
+graph TD
+    subgraph External_Data
+        AACT[(AACT Public Postgres)]
+    end
+
+    subgraph ETL_Container [Docker: Python ETL]
+        E[Extract: SQL Declarativo] --> T[Transform: Data Cleaning & Rule-based NLP]
+        T --> L[Load: Neo4j Client / UNWIND Batches]
+
+        Config{Config & Rules} -.-> E
+        Config -.-> T
+    end
+
+    subgraph Graph_Storage
+        Neo[(Neo4j Graph Database)]
+    end
+
+    AACT -->|Stream JSON Aggregated| E
+    L -->|Cypher MERGE| Neo
+```
+
 ## Consulta de Extração (AACT)
 Arquivo: `config/extract_trials.sql`
 - Filtra **intervention_type IN ('DRUG', 'BIOLOGICAL')** (para cobrir small molecules e biológicos).
@@ -196,55 +231,29 @@ Arquivo: `config/text_rules.yaml`
 - Cobertura observada em 1000 trials: 1.645 relações Trial–Drug, 79 com rota (≈4,8%), 21 com forma (≈1,3%). Limitação documentada: falta de texto rico na fonte.
 
 ## Modelo de Grafo (Neo4j)
-- Nós: `(:Trial {nct_id})`, `(:Drug {name})`, `(:Condition {name})`, `(:Organization {name})`
-- Relações:
-  - `(:Drug)-[:STUDIED_IN {route?, dosage_form?}]->(:Trial)`
-  - `(:Trial)-[:STUDIES_CONDITION]->(:Condition)`
-  - `(:Trial)-[:SPONSORED_BY {class?}]->(:Organization)`
-- Constraints/Índices:
-  - `Trial.nct_id` UNIQUE
-  - `Drug.name` UNIQUE
-  - `Condition.name` UNIQUE
-  - `Organization.name` UNIQUE
-  - Indexes em `Trial.phase`, `Trial.status`
+- Nós: Trial (chave `nct_id`), Drug (`name`), Condition (`name`), Organization (`name`).
+- Relações: Trial–Drug via STUDIED_IN (com propriedades `route` e `dosage_form` quando conhecidas); Trial–Condition via STUDIES_CONDITION; Trial–Organization via SPONSORED_BY (propriedade `class` quando conhecida).
+- Constraints/Índices: unicidade em `nct_id` de Trial e nomes de Drug/Condition/Organization; índices em `Trial.phase` e `Trial.status`.
 
 
 ## Limitações Conhecidas
 - Inferência limitada por falta de texto rico: muitos `Unknown` para rota/dosagem.
 - Normalização de nomes via `.title()` pode simplificar acrônimos (ex: dnaJ → Dnaj).
 - Placebo permanece como droga (fidelidade à fonte). Opcional filtrar se necessário.
-- Não usamos LLM/NER pesado por foco em leveza e reprodutibilidade; documentamos a limitação.
-
-## Decisões e Riscos sobre Rota/Dosagem e Normalização
-- Cobertura de rota/dosagem tende a ser baixa porque as descrições de intervenção raramente trazem texto rico. Optamos por regras simples e declarativas (text_rules.yaml) e preferimos `Unknown` a falsos positivos.
-- Não usamos LLM/NER pesado: o desafio pede abordagem “razoável” e documentada; priorizamos imagem leve, execução offline e transparência. Futuro: NER/LLM (BioBERT/SciSpacy) ou heurística secundária no nome da droga para hints de forma/rota.
-- `.title()` simplifica acrônimos (dnaJ → Dnaj); aceitamos essa limitação para reduzir variações triviais. Futuro: lista de exceções/sinônimos para acrônimos conhecidos.
-- Ao iniciar, o Neo4j pode avisar que constraints/índices já existem; é esperado e demonstra a idempotência da criação de schema (`IF NOT EXISTS`).
+- Não usamos LLM/NER pesado para manter imagem leve e execução offline; limitação documentada.
+- Ao iniciar, o Neo4j pode avisar que constraints/índices já existem; é esperado (uso de `IF NOT EXISTS`).
 
 
 ## Exemplos de Saída (queries no Neo4j)
-- Top drugs (1000 trials):
-  - Zidovudine 122, Didanosine 54, Buprenorphine 42, Lamivudine 34, Stavudine 32, Zalcitabine 20, Indinavir Sulfate 20, Nevirapine 19, Rgp120/Hiv-1 Sf-2 18, Ritonavir 18.
-
-- Por empresa (Novartis):
-  - Drugs: Rivastigmine; Conditions: Alzheimer Disease, Cognition Disorders.
-
-- Por condição (Alzheimer Disease):
-  - Drogas (todas PHASE3, trial_count mostrado): Estrogen (2), Galantamine (1), Donepezil (1), Vitamin E (1), Trazodone (1), Haloperidol (1), Rivastigmine (1), Prednisone (1), Estrogen And Progesterone (1), Melatonin (1).
-
-- Cobertura rota/dosagem (1000 trials → 1.645 relações Trial–Drug):
-  - with_route: 79 (~5%); with_dosage_form: 21 (~1%). Baixa cobertura devido a descrições pobres; documentado como limitação da abordagem rule-based.
+- Top drugs (1000 trials): Zidovudine 122, Didanosine 54, Buprenorphine 42, Lamivudine 34, Stavudine 32, Zalcitabine 20, Indinavir Sulfate 20, Nevirapine 19, Rgp120/Hiv-1 Sf-2 18, Ritonavir 18.
+- Por empresa (Novartis): Drugs: Rivastigmine; Conditions: Alzheimer Disease, Cognition Disorders.
+- Por condição (Alzheimer Disease): drogas PHASE3 com maior contagem incluem Estrogen (2), Galantamine (1), Donepezil (1), Vitamin E (1), Trazodone (1), Haloperidol (1), Rivastigmine (1), Prednisone (1), Estrogen And Progesterone (1), Melatonin (1).
+- Cobertura rota/dosagem (1000 trials → 1.645 relações Trial–Drug): with_route 79 (~5%); with_dosage_form 21 (~1%). Baixa cobertura devido a descrições pobres; documentado como limitação da abordagem rule-based.
 
 
 ## Próximos Passos (se houvesse mais tempo)
-- Usar NER/LLM (ex.: BioBERT/SciSpacy) para melhorar inferência de rota/dosagem.
-- Enriquecer normalização de nomes (tabelas de sinônimos, remoção de sufixos “Tablet”, “Injection” do nome sem afetar identidade).
-- Métricas automáticas (quantos nós/arestas criados, coverage de campos).
-- Incremental ingestion (delta) e workflow (Airflow/Prefect).
-
-
-### Trade-offs de Inferência (rota/forma)
-- AI Query / Databricks end-to-end: maior cobertura potencial e facilidades gerenciadas; porém depende de cloud, tem custo/latência e foge da leveza/reprodutibilidade local.
-- Modelos locais (BioBERT/SciSpacy): melhor recall que regras; mas aumentam a imagem (GB), o tempo de build e a complexidade operacional.
-- Abordagem atual (rule-based): leve, offline, transparente e fácil de auditar; menor recall, mas alinhada ao “reasonable approach” do desafio e mantendo a imagem enxuta.
+- NER/LLM (BioBERT/SciSpacy) ou LLMs gerenciados para melhorar rota/dosagem.
+- Enriquecer normalização de nomes (sinônimos, remoção controlada de sufixos sem afetar identidade).
+- Métricas automáticas (nós/arestas criados, coverage de campos).
+- Ingestão incremental e orquestração (Airflow/Prefect).
 
