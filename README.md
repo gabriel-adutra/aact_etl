@@ -115,10 +115,6 @@ A inferência de rota e forma farmacêutica em texto livre do ClinicalTrials.gov
 
 Posicionamento: mantivemos o Nível 1 para cumprir o desafio com leveza, reprodutibilidade e clareza. Próximos passos naturais seriam experimentar Nível 3 (modelos biomédicos) ou Nível 4 (LLM) se aceitarmos maior custo/complexidade em troca de maior recall.
 
-## Modelo de Grafo (Neo4j)
-- Nós: Trial (chave `nct_id`), Drug (`name`), Condition (`name`), Organization (`name`).
-- Relações: Trial–Drug via STUDIED_IN (com propriedades `route` e `dosage_form` quando conhecidas); Trial–Condition via STUDIES_CONDITION; Trial–Organization via SPONSORED_BY (propriedade `class` quando conhecida).
-- Constraints/Índices: unicidade em `nct_id` de Trial e nomes de Drug/Condition/Organization; índices em `Trial.phase` e `Trial.status`.
 
 ## Consulta de Extração (AACT)
 Arquivo: `config/extract_trials.sql`
@@ -129,6 +125,68 @@ Arquivo: `config/extract_trials.sql`
   - `drugs`: lista de `{name, description}`
   - `conditions`: lista de nomes
   - `sponsors`: lista de `{name, class}`
+
+Exemplo (1 registro extraído):
+```
+{
+  "nct_id": "NCT00000102",
+  "brief_title": "Study of Drug X in Condition Y",
+  "phase": "PHASE3",
+  "overall_status": "COMPLETED",
+  "drugs": [
+    {"name": "Drug X", "description": "Oral tablet administered daily"}
+  ],
+  "conditions": ["Condition Y"],
+  "sponsors": [
+    {"name": "Example Pharma Inc", "class": "INDUSTRY"}
+  ]
+}
+```
+
+Exemplo (mesmo registro após limpeza/transform):
+```
+{
+  "nct_id": "NCT00000102",
+  "title": "Study of Drug X in Condition Y",
+  "phase": "PHASE3",
+  "status": "COMPLETED",
+  "drugs": [
+    {"name": "Drug X", "route": "Oral", "dosage_form": "Tablet"}
+  ],
+  "conditions": [{"name": "Condition Y"}],
+  "sponsors": [
+    {"name": "Example Pharma Inc", "class": "INDUSTRY"}
+  ]
+}
+```
+
+Visualização típica no Neo4j Browser (consulta e resultado em tabela):
+```
+MATCH (t:Trial {nct_id:"NCT00000102"})
+OPTIONAL MATCH (t)<-[r:STUDIED_IN]-(d:Drug)
+OPTIONAL MATCH (t)-[:STUDIES_CONDITION]->(c:Condition)
+OPTIONAL MATCH (t)-[s:SPONSORED_BY]->(o:Organization)
+RETURN t.nct_id AS trial,
+       d.name    AS drug,
+       r.route   AS route,
+       r.dosage_form AS dosage_form,
+       c.name    AS condition,
+       o.name    AS sponsor,
+       s.class   AS sponsor_class;
+```
+Exemplo de saída:
+```
+┌──────────────┬────────┬──────┬────────────┬─────────────┬─────────────────────┬──────────────┐
+│ trial        │ drug   │ route│ dosage_form│ condition   │ sponsor             │ sponsor_class│
+├──────────────┼────────┼──────┼────────────┼─────────────┼─────────────────────┼──────────────┤
+│ NCT00000102  │ Drug X │ Oral │ Tablet     │ Condition Y │ Example Pharma Inc  │ INDUSTRY     │
+└──────────────┴────────┴──────┴────────────┴─────────────┴─────────────────────┴──────────────┘
+```
+
+## Modelo de Grafo (Neo4j)
+- Nós: Trial (chave `nct_id`), Drug (`name`), Condition (`name`), Organization (`name`).
+- Relações: Trial–Drug via STUDIED_IN (com propriedades `route` e `dosage_form` quando conhecidas); Trial–Condition via STUDIES_CONDITION; Trial–Organization via SPONSORED_BY (propriedade `class` quando conhecida).
+- Constraints/Índices: unicidade em `nct_id` de Trial e nomes de Drug/Condition/Organization; índices em `Trial.phase` e `Trial.status`.
 
 ## Inferência de Rota/Dosagem
 Arquivo: `config/text_rules.yaml`
@@ -155,20 +213,28 @@ NEO4J_PASSWORD=password
 ```
 
 ## Como Rodar (End-to-End)
-1) Build:
+1) Build e subir os dois serviços (ambiente limpo):
 ```
-docker compose build etl
+docker compose up --build -d
 ```
-2) Executar ETL (default: 1000 estudos, batch=500):
+2) (Opcional) subir apenas Neo4j primeiro:
 ```
-docker compose run --rm etl python src/main.py
+docker compose up -d neo4j
 ```
-3) Acessar Neo4j Browser:
+3) Subir o etl em modo ocioso (sleep):
+```
+docker compose up -d etl
+```
+4) Executar o pipeline ETL (default: 1000 estudos, batch=500):
+```
+docker compose exec etl python src/main.py
+```
+5) Acessar Neo4j Browser:
 - URL: http://localhost:7474  
 - User: `neo4j`  
 - Pass: `password` (ajuste no `.env` se quiser)
 
-4) Consultas de Demonstração (também em `queries.cypher`):
+6) Consultas de Demonstração (também em `queries.cypher`):
 - Top drugs:
 ```
 MATCH (d:Drug)<-[:STUDIED_IN]-(t:Trial)
@@ -196,6 +262,24 @@ RETURN
   count(r) AS total_relationships,
   SUM(CASE WHEN r.route IS NOT NULL AND r.route <> "Unknown" THEN 1 ELSE 0 END) AS with_route,
   SUM(CASE WHEN r.dosage_form IS NOT NULL AND r.dosage_form <> "Unknown" THEN 1 ELSE 0 END) AS with_dosage_form;
+```
+
+7) Rodar testes unitários (verbose):
+- Todos de uma vez:
+```
+docker compose exec etl python -m unittest -v tests.test_readme_example tests.test_text_parser tests.test_data_cleaner
+```
+- Apenas o exemplo do README:
+```
+docker compose exec etl python -m unittest -v tests.test_readme_example
+```
+- Apenas o parser:
+```
+docker compose exec etl python -m unittest -v tests.test_text_parser
+```
+- Apenas o cleaner:
+```
+docker compose exec etl python -m unittest -v tests.test_data_cleaner
 ```
 ## Ajustes de Volume
 - Editar `run_pipeline(limit=..., batch_size=...)` em `src/main.py` e rodar novamente:
