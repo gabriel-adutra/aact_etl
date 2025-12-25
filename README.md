@@ -10,7 +10,7 @@ Este repositório implementa um pipeline ETL completo, idempotente e conteineriz
 - Via de administração e forma farmacêutica (como propriedades na relação Trial–Drug)
 
 ## Arquitetura (Separação de Responsabilidades)
-A arquitetura do pipeline foi desenhada para refletir separação de responsabilidades, configurabilidade e idempotência, alinhada ao que o desafio valoriza (“pipeline bem arquitetado”, “config-driven”, “batching/backpressure”, “idempotent loads”). Essa organização segue a diretriz de “estrutura clara”: cada módulo tem uma única missão (ler, processar, carregar, orquestrar), e as regras/queries ficam em config para facilitar ajustes sem tocar código.
+A arquitetura do pipeline foi desenhada para refletir separação de responsabilidades, configurabilidade e idempotência, alinhada ao que o desafio valoriza (“pipeline bem arquitetado”, “config-driven”, “batching/backpressure”, “idempotent loads”). Essa organização segue a diretriz de “estrutura clara”: cada módulo tem uma única missão (ler, processar, carregar, orquestrar), e as regras/queries ficam em config para facilitar ajustes sem tocar no código.
 
 ## Diagrama (Visão Geral)
 ```mermaid
@@ -35,15 +35,51 @@ graph TD
     L -->|Cypher MERGE| Neo
 ```
 
-### Módulos principais (organizados em extract/transform/load)
+### Módulos principais
+
+```
+.
+├── config
+│   ├── extract_trials.sql
+│   └── text_rules.yaml
+├── src
+│   ├── extract
+│   │   ├── __init__.py 
+│   │   └── aact_client.py
+│   ├── load
+│   │   ├── __init__.py
+│   │   └── neo4j_client.py
+│   ├── transform
+│       ├── __init__.py
+│       ├── data_cleaner.py
+│       └── text_parser.py
+│   └── main.py
+├── tests
+│   ├── test_data_cleaner.py
+│   ├── test_text_parser.py
+│   ├── test_readme_example.py
+│   └── test_bonus_integration.py
+├── .env
+├── README.md
+├── docker-compose.yml
+├── Dockerfile
+├── queries.cypher
+└── requirements.txt
+```
+
 - `config/extract_trials.sql` — Query declarativa de extração (AACT → JSON agregado por estudo).
 - `config/text_rules.yaml` — Regras declarativas de inferência (rota/dosagem) baseadas em palavras‑chave.
 - `src/extract/aact_client.py` — Adapter de leitura AACT (PostgreSQL), streaming em batches.
+- `src/load/neo4j_client.py` — Adapter de escrita Neo4j (constraints, índices, carga em lote via UNWIND).
 - `src/transform/data_cleaner.py` — Normalização de campos e orquestração da limpeza.
 - `src/transform/text_parser.py` — Inferência rule‑based de rota/dosagem a partir de texto livre.
-- `src/load/neo4j_client.py` — Adapter de escrita Neo4j (constraints, índices, carga em lote via UNWIND).
 - `src/main.py` — Orquestrador do pipeline (Extract → Transform → Load) com batch e limite configuráveis.
+- `tests/test_text_parser.py` — Unitário do parser de rota/forma.
+- `tests/test_data_cleaner.py` — Unitário do cleaner/normalização.
+- `tests/test_readme_example.py` — Valida o exemplo do README (entrada/saída/tabela).
+- `tests/test_bonus_integration.py` — Carga sintética no Neo4j e queries de validação.
 - `queries.cypher` — Consultas de demonstração para validação rápida no Neo4j.
+
 
 ### Características do Sistema
 - **Batch & Idempotente:** MERGE em todas as entidades; repetir o ETL não duplica dados.
