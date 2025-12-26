@@ -74,7 +74,7 @@ graph TD
 - `src/transform/data_cleaner.py` — Normalização de campos e orquestração da limpeza (inclui route/dosage_form em STUDIED_IN).
 - `src/transform/text_parser.py` — Inferência rule‑based de route/dosage_form a partir de texto livre.
 - `src/main.py` — Orquestrador do pipeline (Extract → Transform → Load) com batch e limite configuráveis.
-- `tests/test_text_parser.py` — Unitário do parser de rota/forma.
+- `tests/test_text_parser.py` — Unitário do parser de route/dosage_form.
 - `tests/test_data_cleaner.py` — Unitário do cleaner/normalização.
 - `tests/test_readme_example.py` — Unitário que valida o exemplo de um único registro (entrada/saída/tabela) que há mais abaixo aqui nesse README.
 - `tests/test_bonus_integration.py` — Integração que faz carga sintética no Neo4j e queries de validação.
@@ -91,7 +91,7 @@ graph TD
 ## Como o Sistema Funciona (atendendo aos requisitos funcionais)
 
 1) **Ingestão (query reproduzível, dataset não trivial, estágio clínico)**  
-   - Query versionada em `config/extract_trials.sql`: estudos intervencionais em PHASE1/2/3/4 (inclui PHASE1/PHASE2, PHASE2/PHASE3) e `intervention_type IN ('DRUG','BIOLOGICAL')` (minha definição de “clinical-stage”).  
+   - Query versionada em `config/extract_trials.sql`: estudos intervencionais em PHASE1/2/3/4 (inclui PHASE1/PHASE2, PHASE2/PHASE3) e `intervention_type IN ('DRUG','BIOLOGICAL')` (minha definição de “clinical-stage baseada na documentação”).  
    - Retorna agregado por estudo (`json_agg`) e, por padrão, processa 1000 trials (≥ 500 exigido). Sem binários/dumps: sempre dados atuais do AACT público.
 
 2) **Transformação (campos mínimos, normalização, faltantes/duplicatas)**  
@@ -104,7 +104,7 @@ graph TD
    - Schema garantido no start: constraints de unicidade em nct_id e nomes; índices em phase/status. Carga em lote com `UNWIND + MERGE` (idempotente, sem passos manuais).
 
 4) **Validação (queries obrigatórias)**  
-   - `queries.cypher` traz: top drugs; por empresa (drugs/conditions); por condição (drugs/fases); cobertura de rota/dosagem.
+   - `queries.cypher` traz quatro consultas de validação: (1) top drugs por número de trials; (2) por empresa, listando drogas e condições; (3) por condição, mostrando drogas e fases; (4) cobertura de route/dosage_form.
 
 
 ## Decisões e Racional
@@ -121,7 +121,7 @@ graph TD
    - Alternativas: juntar no Python (mais I/O, mais lógica) ou agregar já no banco.
    - Escolha: usar `json_agg` no Postgres para devolver 1 linha por estudo com listas de drogas/condições/patrocinadores, reduzindo transferência e evitando reagrupamento manual. Mantém a transformação declarativa e versionada em SQL.
 
-3) **Inferência de rota/dosagem por palavras‑chave (regras)**
+3) **Inferência de route/dosage_form por palavras‑chave (regras)**
    - Alternativas: LLM/NER (maior recall, custo/peso maiores) ou heurísticas simples. Inclui opções gerenciadas como Databricks AI Query, que facilitam mas dependem de cloud, custo e latência.
    - Escolha: regras no `config/text_rules.yaml`, porque são leves, auditáveis e reprodutíveis em ambiente Docker enxuto. Aderem ao espírito do desafio (não construir uma ontologia farmacêutica “perfeita”, mas uma abordagem razoável e documentada).
    - Limitação: descrições pobres geram `Unknown` (~5% rota, ~1% forma em 1000 trials). Documentado como risco conhecido. Futuro: NER/LLM (BioBERT/SciSpacy), AI Query gerenciado (ex.: Databricks) ou hints no nome da droga, se aceitarmos custo/complexidade adicionais.
@@ -133,7 +133,7 @@ graph TD
 
 5) **Placebo mantido**
    - Alternativas: filtrar placebo na extração ou na carga.
-   - Escolha: manter para fidelidade à fonte e para não embutir regra de negócio; facilita auditoria. Se o avaliador quiser filtrar, é um ajuste simples na SQL.
+   - Escolha: manter para fidelidade à fonte e para não embutir regra de negócio, facilita auditoria. Se quiser filtrar, é um ajuste simples na SQL.
 
 6) **Normalização de nomes com `.title()`**
    - Alternativas: pipelines de normalização avançados (sinônimos, stemming) ou manter bruto.
