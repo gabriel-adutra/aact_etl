@@ -1,5 +1,6 @@
 import unittest
 import logging
+import json
 
 from src.transform.data_cleaner import DataCleaner
 
@@ -36,13 +37,13 @@ class ReadmeExampleTest(unittest.TestCase):
         }
 
         cleaner = DataCleaner()
-        logger.info("Running cleaner on README example")
+        logger.info("RAW input (README example):\n%s", json.dumps(raw, ensure_ascii=False, indent=2))
         cleaned = cleaner.clean_study(raw)
-        logger.info("Cleaned output: %s", cleaned)
+        logger.info("TRANSFORMED output:\n%s", json.dumps(cleaned, ensure_ascii=False, indent=2))
 
         self.assertEqual(cleaned, expected_clean)
 
-        # Tabela equivalente ao exemplo do README
+        # Projeção tabular equivalente à consulta no Neo4j
         table_rows = [
             {
                 "trial": cleaned["nct_id"],
@@ -68,7 +69,7 @@ class ReadmeExampleTest(unittest.TestCase):
         ]
 
         self.assertEqual(table_rows, expected_table)
-        logger.info("Tabular view: %s", table_rows)
+        logger.info("Projected tabular view (Neo4j-style):\n%s", json.dumps(table_rows, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
