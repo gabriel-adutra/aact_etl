@@ -254,20 +254,20 @@ NEO4J_PASSWORD=password
 ```
 
 ## Como Rodar (End-to-End)
-1) Build e subir os dois serviços (ambiente limpo):
+1) Build e suba os dois serviços (Neo4j e ETL) em ambiente limpo:
 ```
 docker compose up --build -d
 ```
-2) Executar o pipeline ETL (default: 1000 estudos, batch=500):
+2) Execute o pipeline ETL (default: 1000 estudos, batch=500):
 ```
 docker compose exec etl python src/main.py
 ```
-3) Acessar Neo4j Browser:
+3) Acesse Neo4j Browser:
 - URL: http://localhost:7474  
 - User: `neo4j`  
 - Pass: `password` (ajuste no `.env` se quiser)
 
-4) Consultas de Demonstração (também em `queries.cypher`):
+4) Realize as Consultas de Demonstração Abaixo (também em `queries.cypher`):
 - Top drugs:
 ```
 MATCH (d:Drug)<-[:STUDIED_IN]-(t:Trial)
@@ -297,12 +297,8 @@ RETURN
   SUM(CASE WHEN r.dosage_form IS NOT NULL AND r.dosage_form <> "Unknown" THEN 1 ELSE 0 END) AS with_dosage_form;
 ```
 
-5) Rodar testes unitários:
+5) Rode os Testes Unitários e de Integração:
 
-- Apenas o test_readme_example (end to end de um registro):
-```
-docker compose exec etl python -m unittest -v tests.test_readme_example
-```
 - Apenas o test_text_parser:
 ```
 docker compose exec etl python -m unittest -v tests.test_text_parser
@@ -311,10 +307,15 @@ docker compose exec etl python -m unittest -v tests.test_text_parser
 ```
 docker compose exec etl python -m unittest -v tests.test_data_cleaner
 ```
-- Apenas o teste do data_cleaner:
+- Apenas o test_readme_example (end to end de um registro):
 ```
-docker compose exec etl python -m unittest -v tests.test_data_cleaner
+docker compose exec etl python -m unittest -v tests.test_readme_example
 ```
+- Apenas o teste de integração test_bonus_integration.py:
+```
+docker compose exec etl python -m unittest -v tests.test_bonus_integration
+```
+
 
 ## Exemplos de Resultados em Screenshot. Saídas baseadas em queries no Neo4j.
 
