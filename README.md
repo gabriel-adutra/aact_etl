@@ -46,13 +46,13 @@ graph TD
 │   ├── extract
 │   │   ├── __init__.py 
 │   │   └── aact_client.py
+│   ├── transform
+│   │   ├── __init__.py
+│   │   ├── data_cleaner.py
+│   │   └── text_parser.py
 │   ├── load
 │   │   ├── __init__.py
 │   │   └── neo4j_client.py
-│   ├── transform
-│       ├── __init__.py
-│       ├── data_cleaner.py
-│       └── text_parser.py
 │   └── main.py
 ├── tests
 │   ├── test_data_cleaner.py
@@ -70,9 +70,9 @@ graph TD
 - `config/extract_trials.sql` — Query declarativa de extração (AACT → JSON agregado por estudo).
 - `config/text_rules.yaml` — Regras declarativas de inferência (route/dosage_form) baseadas em palavras‑chave.
 - `src/extract/aact_client.py` — Adapter de leitura AACT (PostgreSQL), streaming em batches.
-- `src/load/neo4j_client.py` — Adapter de escrita Neo4j (constraints, índices, carga em lote via UNWIND).
 - `src/transform/data_cleaner.py` — Normalização de campos e orquestração da limpeza (inclui route/dosage_form em STUDIED_IN).
 - `src/transform/text_parser.py` — Inferência rule‑based de route/dosage_form a partir de texto livre.
+- `src/load/neo4j_client.py` — Adapter de escrita Neo4j (constraints, índices, carga em lote via UNWIND).
 - `src/main.py` — Orquestrador do pipeline (Extract → Transform → Load) com batch e limite configuráveis.
 - `tests/test_text_parser.py` — Unitário do parser de route/dosage_form.
 - `tests/test_data_cleaner.py` — Unitário do cleaner/normalização.
@@ -162,7 +162,7 @@ Arquivo: `config/extract_trials.sql`
   - `conditions`: lista de nomes
   - `sponsors`: lista de `{name, class}`
 
-Exemplo (1 registro extraído):
+Exemplo do README. (1 registro extraído):
 ```
 {
   "nct_id": "NCT00000102",
@@ -230,6 +230,14 @@ Arquivo: `config/text_rules.yaml`
 - Aplicado à **description** da intervenção. Se não houver texto, retorna `Unknown`.
 - Cobertura observada em 1000 trials: 1.645 relações Trial–Drug, 79 com route (≈4,8%), 21 com dosage_form (≈1,3%). Limitação documentada: falta de texto rico na fonte.
 
+## Testes e Qualidade
+- Teste unitário valida parser do texto (`tests/test_text_parser.py`)
+- Teste unitário valida limpeza dos dados (`tests/test_data_cleaner.py`)
+- Teste unitário que valida exemplo descrito nesse README. (End to End de um único registro.) (`tests/test_readme_example.py`)
+- Teste de integração (bônus) que extrai, transforma e carrega um conjunto pequeno de dados no Neo4j  (`tests/test_bonus_integration.py`)
+- Filosofia: preferimos precisão a falsos positivos; `Unknown` é usado quando não há evidência suficiente.
+- Logs de testes mostram batches carregados, progresso e carregamento, úteis para monitorar execução.
+
 
 ## Pré-requisitos
 - Docker + Docker Compose.
@@ -253,24 +261,16 @@ NEO4J_PASSWORD=password
 ```
 docker compose up --build -d
 ```
-2) (Opcional) subir apenas Neo4j primeiro:
-```
-docker compose up -d neo4j
-```
-3) Subir o etl em modo ocioso (sleep):
-```
-docker compose up -d etl
-```
-4) Executar o pipeline ETL (default: 1000 estudos, batch=500):
+2) Executar o pipeline ETL (default: 1000 estudos, batch=500):
 ```
 docker compose exec etl python src/main.py
 ```
-5) Acessar Neo4j Browser:
+3) Acessar Neo4j Browser:
 - URL: http://localhost:7474  
 - User: `neo4j`  
 - Pass: `password` (ajuste no `.env` se quiser)
 
-6) Consultas de Demonstração (também em `queries.cypher`):
+4) Consultas de Demonstração (também em `queries.cypher`) com exemplos de resultado:
 - Top drugs:
 ```
 MATCH (d:Drug)<-[:STUDIED_IN]-(t:Trial)
@@ -300,45 +300,24 @@ RETURN
   SUM(CASE WHEN r.dosage_form IS NOT NULL AND r.dosage_form <> "Unknown" THEN 1 ELSE 0 END) AS with_dosage_form;
 ```
 
-7) Rodar testes unitários (verbose):
-- Todos de uma vez:
-```
-docker compose exec etl python -m unittest -v tests.test_readme_example tests.test_text_parser tests.test_data_cleaner
-```
-- Apenas o exemplo do README (End to End de um registro):
+5) Rodar testes unitários:
+
+- Apenas o test_readme_example (End to End de um registro):
 ```
 docker compose exec etl python -m unittest -v tests.test_readme_example
 ```
-- Apenas o teste do text_parser:
+- Apenas o test_text_parser:
 ```
 docker compose exec etl python -m unittest -v tests.test_text_parser
+```
+- Apenas o test_data_cleaner:
+```
+docker compose exec etl python -m unittest -v tests.test_data_cleaner
 ```
 - Apenas o teste do data_cleaner:
 ```
 docker compose exec etl python -m unittest -v tests.test_data_cleaner
 ```
-
-## Ajustes de Volume
-- Editar `run_pipeline(limit=..., batch_size=...)` em `src/main.py` e rodar novamente:
-```
-docker compose run --rm etl python src/main.py
-```
-- Carga é idempotente (MERGE evita duplicatas).
-- Aviso: ao reexecutar, o Neo4j pode avisar que constraints/índices já existem; é esperado (uso de `IF NOT EXISTS`).
-
-
-## Testes e Qualidade
-- Testes unitários validam parser e limpeza (`tests/test_text_parser.py`, `tests/test_data_cleaner.py`). Rodar com: `docker compose run --rm etl python -m unittest discover tests`
-- Filosofia: preferimos precisão a falsos positivos; `Unknown` é usado quando não há evidência suficiente.
-- Logs do pipeline mostram batches carregados e progresso, úteis para monitorar execução.
-- Teste de integração (bônus) que carrega um conjunto sintético no Neo4j e valida contagens/queries: `docker compose exec etl python -m unittest -v tests.test_bonus_integration`
-
-
-## Limitações Conhecidas
-- Baixa cobertura de rota/dosagem por falta de texto rico nas descrições de intervenção; muitos `Unknown`.
-- `.title()` pode simplificar acrônimos (ex.: dnaJ → Dnaj).
-- Placebo permanece como Drug (fidelidade à fonte); pode ser filtrado se desejado.
-- Não usamos LLM/NER pesado para manter imagem leve e execução offline; limitação documentada.
 
 
 ## Decisões e Trade-offs
@@ -354,14 +333,13 @@ docker compose run --rm etl python src/main.py
 - **Placebo como droga:** Mantido conforme fonte; decisão de negócio poderia filtrar, mas preservamos fidelidade aos dados.
 - **Normalização de nomes:** `.title()` pode simplificar acrônimos (ex: dnaJ → Dnaj). Documentado como limitação aceitável.
 
-## Exemplos de Saída (queries no Neo4j)
-- Top drugs (1000 trials): Zidovudine 122, Didanosine 54, Buprenorphine 42, Lamivudine 34, Stavudine 32, Zalcitabine 20, Indinavir Sulfate 20, Nevirapine 19, Rgp120/Hiv-1 Sf-2 18, Ritonavir 18.
-- Por empresa (Novartis): Drugs: Rivastigmine; Conditions: Alzheimer Disease, Cognition Disorders.
-- Por condição (Alzheimer Disease): drogas PHASE3 com maior contagem incluem Estrogen (2), Galantamine (1), Donepezil (1), Vitamin E (1), Trazodone (1), Haloperidol (1), Rivastigmine (1), Prednisone (1), Estrogen And Progesterone (1), Melatonin (1).
-- Cobertura rota/dosagem (1000 trials → 1.645 relações Trial–Drug): with_route 79 (~5%); with_dosage_form 21 (~1%). Baixa cobertura devido a descrições pobres; documentado como limitação da abordagem rule-based.
+## Screenshots de saídas baseadas em queries no Neo4j.
+
 
 ## Próximos Passos (se houvesse mais tempo)
 - NER/LLM (BioBERT/SciSpacy) para melhorar rota/dosagem.
 - Heurística no nome da droga para extrair forma/rota sem alterar o identificador.
 - Métricas automáticas (nós/arestas criados, coverage de campos).
 - Ingestão incremental e orquestração (Airflow/Prefect).
+
+
