@@ -142,7 +142,7 @@ graph TD
 
 ## Deep Dive: O Desafio da Extração de Entidades
 
-A inferência de rota e forma farmacêutica em texto livre do ClinicalTrials.gov é difícil por falta de padronização. A estratégia escolhida é uma linha de base deliberada, priorizando precisão e transparência em detrimento de recall. A “escada” de evolução possível:
+A inferência de route e dosage_forma farmacêutica em texto livre do ClinicalTrials.gov é difícil por falta de padronização. A estratégia escolhida é uma linha de base deliberada, priorizando precisão e transparência em detrimento de recall. A “escada” de evolução possível:
 
 - **Nível 1 (atual) — Heurísticas / Keywords (rules):** baixo custo, determinístico, auditável; roda em segundos no Docker. Cobertura limitada porque muitas descrições trazem só o nome da droga. Preferimos `Unknown` a falsos positivos.
 - **Nível 2 — Regex estruturado:** descartado aqui porque as descrições não seguem padrão fixo (ordem de dose/droga varia, texto é esparso).
@@ -305,15 +305,15 @@ RETURN
 ```
 docker compose exec etl python -m unittest -v tests.test_readme_example tests.test_text_parser tests.test_data_cleaner
 ```
-- Apenas o exemplo do README:
+- Apenas o exemplo do README (End to End de um registro):
 ```
 docker compose exec etl python -m unittest -v tests.test_readme_example
 ```
-- Apenas o parser:
+- Apenas o teste do text_parser:
 ```
 docker compose exec etl python -m unittest -v tests.test_text_parser
 ```
-- Apenas o cleaner:
+- Apenas o teste do data_cleaner:
 ```
 docker compose exec etl python -m unittest -v tests.test_data_cleaner
 ```
