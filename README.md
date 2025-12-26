@@ -265,7 +265,7 @@ docker compose exec etl python src/main.py
 3) Acesse Neo4j Browser:
 - URL: http://localhost:7474  
 - User: `neo4j`  
-- Pass: `password` (ajuste no `.env` se quiser)
+- Pass: `password`
 
 4) Realize as Consultas de Demonstração Abaixo (também em `queries.cypher`):
 - Top drugs:
