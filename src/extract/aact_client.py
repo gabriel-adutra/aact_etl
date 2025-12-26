@@ -34,12 +34,15 @@ class AACTClient:
         with open(query_path, 'r') as f:
             sql = f.read()
 
+        logger.info("Connecting to AACT database...")
         conn = self._get_connection()
-        logger.info("Connected to AACT. Executing extraction query...")
+        logger.info("Successfully connected to AACT.")
         
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                logger.info("Starting trial extraction from AACT using streaming.")
                 cur.execute(sql)
+                logger.info("Trial extraction query started successfully.")
                 
                 total_fetched = 0
                 while True:
@@ -51,7 +54,7 @@ class AACTClient:
                         yield dict(row)
                         
                     total_fetched += len(rows)
-                    logger.info(f"Fetched {total_fetched} rows so far...")
+                    logger.info(f"Fetched {total_fetched} trials so far.")
                     
         except Exception as e:
             logger.error(f"Error during query execution: {e}")
@@ -59,5 +62,5 @@ class AACTClient:
         finally:
             if conn:
                 conn.close()
-            logger.info("AACT Connection closed.")
+            logger.info("Closed connection to AACT")
 
