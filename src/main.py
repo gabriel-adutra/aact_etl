@@ -30,16 +30,13 @@ def run_pipeline(limit=1000, batch_size=500):
     total_processed = 0
 
     try:
-        logger.info("Extracting trials from AACT (streaming)...")
-        trials_stream = aact_client.fetch_trials() #just creates a generator of dictionaries
-
-        logger.info(f"Transforming and batching trials (batch_size={batch_size}, limit={limit})...")
+        trials_stream = aact_client.fetch_trials() #just creates a generator of dictionaries. lazy function.
         for clean_batch in transform_batches(trials_stream, data_cleaner, batch_size, limit):
             if clean_batch:
                 neo4j_client.load_trials_batch(clean_batch)
                 total_processed += len(clean_batch)
 
-        logger.info(f"Pipeline completed successfully. Total processed: {total_processed}. Next: open http://localhost:7474, authenticate, and run the queries in queries.cypher to validate the graph.")
+        logger.info(f"Pipeline completed successfully. Total processed: {total_processed}. Next step: open http://localhost:7474, authenticate, and run the queries in queries.cypher to validate the graph.")
 
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
