@@ -311,7 +311,7 @@ docker compose exec etl python scripts/analyzes_entity_extraction_metrics.py
 - User: `neo4j`  
 - Pass: `password`
 
-6) Realize as Consultas de Demonstração Abaixo (também disponíveis em `queries.cypher`):
+6) Realize as Consultas de Demonstração Abaixo (prontas para copiar/colar no Neo4j Browser) O arquivo `queries.cypher` contém versões parametrizadas para uso programático:
 - Top drugs:
 ```
 MATCH (d:Drug)<-[:STUDIED_IN]-(t:Trial)
