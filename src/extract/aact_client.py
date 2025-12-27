@@ -4,9 +4,9 @@ from psycopg2.extras import RealDictCursor
 from typing import Generator, Dict, Any
 import logging
 
-# Configure basic logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class AACTClient:
     def __init__(self):
