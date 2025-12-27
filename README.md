@@ -123,7 +123,7 @@ graph TD
 
 A inferência de route e dosage_forma farmacêutica em texto livre do ClinicalTrials.gov é difícil por falta de padronização. A estratégia escolhida é uma linha de base deliberada, priorizando precisão e transparência em detrimento de recall. A “escada” de evolução possível:
 
-- **Nível 1 (atual) — Heurísticas / Keywords (rules):** baixo custo, determinístico, auditável; roda em segundos no Docker. Cobertura limitada porque muitas descrições trazem só o nome da droga. Preferimos `Unknown` a falsos positivos.
+- **Nível 1 (atual) — Heurísticas / Keywords (rules):** Baixo custo, comportamento determinístico e fácil auditoria; executa em poucos segundos em ambiente Docker. A cobertura é limitada, pois muitas descrições contêm apenas o nome da droga. Nesse cenário, optamos por retornar `Unknown` em vez de assumir informações e gerar falsos positivos.
 - **Nível 2 — Regex estruturado:** descartado aqui porque as descrições não seguem padrão fixo (ordem de dose/droga varia, texto é esparso).
 - **Nível 3 — NLP biomédico (SciSpacy/BioBERT):** maior recall sem depender de palavras exatas; custo de imagem/build maior e mais dependências.
 - **Nível 4 — LLMs/AI Functions (GPT-4, Llama-3 via Databricks ou local):** melhor assertividade potencial, mas traz custo, latência e requer validação humana (human-in-the-loop) e governança.
@@ -141,9 +141,9 @@ Arquivo: `config/text_rules.yaml`
 - Relações Trial–Drug sem drug description: 1.509 (91,7% do total)
 - Relações Trial–Drug com drug description: 136 (8,3% do total)
 - Das 136 relações Trial–Drug com drug description:
-  - Route inferido: 40 (2,4% do total, 29,4% das que têm description)
-  - Dosage_form inferido: 22 (1,3% do total, 16,2% das que têm description)
-  - Ambos inferidos: 16 (1,0% do total, 11,8% das que têm description)
+  - Route inferido: 40 (29,4% das que têm description)
+  - Dosage_form inferido: 22 (16,2% das que têm description)
+  - Ambos inferidos: 16 (11,8% das que têm description)
 
 Esses dados podem ser verificados executando o script de análise: `analyzes_entity_extraction_metrics.py`
 
@@ -361,7 +361,7 @@ RETURN
 - **Query relacional → JSON aninhado (json_agg)**: o Postgres já agrupa drogas/condições/patrocinadores por estudo, evitando lógica de reagrupamento no Python.
 - **Inferência de rota/dosagem via regras (regex/keyword)**:
   - Vantagem: leve, reprodutível offline, explica cada decisão.
-  - Limitação: cobertura limitada quando não há texto rico; não é um NER/LLM.
+  - Limitação: acurácia limitada do método rule-based. Das 136 relações Trial–Drug com drug description (8,3% do total), conseguimos inferir route em apenas 29,4% delas, dosage_form em 16,2%, e ambos em 11,8%. Isso ocorre porque as descrições frequentemente não contêm as keywords exatas definidas em `text_rules.yaml`, ou usam variações linguísticas não cobertas pelas regras. Melhorias futuras: usar NER especializado (BioBERT, SciSpacy) ou LLMs com fine-tuning em textos farmacêuticos para maior recall, aceitando o trade-off de maior complexidade e custo computacional.
 - **Por que não Databricks/LLM/Spacy pesado?**
   - Overkill para o escopo; aumenta dependência externa, custo e latência.
   - Repositório e imagem Docker mais enxutos; foco em clareza e reprodutibilidade.
@@ -371,9 +371,8 @@ RETURN
 
 
 ## Próximos Passos (se houvesse mais tempo)
-- NER/LLM (BioBERT/SciSpacy) para melhorar rota/dosagem.
-- Heurística no nome da droga para extrair forma/rota sem alterar o identificador.
+- NER/LLM (BioBERT/SciSpacy) para melhorar acurácia na extração de entidades route/dosage_form.
 - Métricas automáticas (nós/arestas criados, coverage de campos).
-- Ingestão incremental e orquestração (Airflow/Prefect).
+- Ingestão incremental e orquestração (Airflow).
 
 
