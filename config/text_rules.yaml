@@ -1,6 +1,3 @@
-# Rules for inferring metadata from unstructured text
-# Format: category: { output_value: [list_of_synonyms] }
-
 routes:
   Oral:
     - oral
