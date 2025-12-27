@@ -69,3 +69,23 @@ class DataCleaner:
                 'class': sponsor.get('class')
             })
 
+
+# TODO:Ideally, this batching helper should be moved to a dedicated module (e.g., transform/batching.py), keeping data_cleaner focused exclusively on data cleaning, while the orchestration of cleaning and batch processing would live in a separate module. However, for this code challenge, I chose to keep the helper in this file, since the transform/batching.py module would contain only this single function, which would merely increase the number of files without providing meaningful benefits to the current pipeline structure.
+def batch_cleaned_trials(trials_stream, data_cleaner: DataCleaner, batch_size: int, limit: int):
+    batch = []
+    processed = 0
+
+    for raw_trial in trials_stream:
+        processed += 1
+        if processed > limit:
+            break
+
+        clean_trial = data_cleaner.clean_study(raw_trial)
+        batch.append(clean_trial)
+
+        if len(batch) >= batch_size:
+            yield batch
+            batch = []
+
+    if batch:
+        yield batch

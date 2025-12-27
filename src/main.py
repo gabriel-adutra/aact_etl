@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.extract.aact_client import AACTClient
 from src.load.neo4j_client import Neo4jClient
-from src.transform.data_cleaner import DataCleaner
+from src.transform.data_cleaner import DataCleaner, batch_cleaned_trials
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +31,7 @@ def run_pipeline(limit=1000, batch_size=500):
 
     try:
         trials_stream = aact_client.fetch_trials() #just creates a generator of dictionaries. lazy function.
-        for clean_batch in transform_batches(trials_stream, data_cleaner, batch_size, limit):
+        for clean_batch in batch_cleaned_trials(trials_stream, data_cleaner, batch_size, limit):
             if clean_batch:
                 neo4j_client.load_trials_batch(clean_batch)
                 total_processed += len(clean_batch)
@@ -43,27 +43,6 @@ def run_pipeline(limit=1000, batch_size=500):
         sys.exit(1)
     finally:
         neo4j_client.close_connection()
-
-
-
-def transform_batches(trials_stream, data_cleaner: DataCleaner, batch_size: int, limit: int):
-    batch = []
-    processed = 0
-
-    for raw_trial in trials_stream:
-        processed += 1
-        if processed > limit:
-            break
-
-        clean_trial = data_cleaner.clean_study(raw_trial)
-        batch.append(clean_trial)
-
-        if len(batch) >= batch_size:
-            yield batch
-            batch = []
-
-    if batch:
-        yield batch
 
 
 if __name__ == "__main__":
