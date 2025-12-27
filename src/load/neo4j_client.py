@@ -51,6 +51,7 @@ class Neo4jClient:
                     logger.debug(f"Schema applied: {q}")
                 except Exception as e:
                     logger.warning(f"Schema query failed (might already exist): {e}")
+                    raise
                     
 
     def load_trials_batch(self, batch: List[Dict[str, Any]]):
