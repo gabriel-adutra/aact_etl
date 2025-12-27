@@ -65,6 +65,8 @@ graph TD
 │   ├── test_text_parser.py
 │   ├── test_readme_example.py
 │   └── test_bonus_integration.py
+|   scripts
+|   ├── analyzes_entity_extraction_metrics.py
 ├── docs
 │   ├── topDrugs.png
 │   ├── byCompany_Novartis.png
@@ -85,8 +87,10 @@ graph TD
 - `src/transform/text_parser.py` — Inferência rule‑based de route/dosage_form a partir de texto livre.
 - `src/load/neo4j_client.py` — Adapter de escrita Neo4j (constraints, índices, carga em lote via UNWIND).
 - `src/main.py` — Orquestrador do pipeline (Extract → Transform → Load) com batch e limite configuráveis.
-- `queries.cypher` — Consultas de demonstração para validação rápida no Neo4j.
+- `scripts/analyzes_entity_extraction_metrics.py` — Script de análise que extrai dados do AACT, analisa cobertura de drug description, calcula métricas de inferência de route/dosage_form e valida os resultados comparando com Neo4j.
 - `docs`— Contém screenshots do retorno das queries, como solicitado no code challenge.
+- `queries.cypher` — Consultas de demonstração para validação rápida no Neo4j.
+
 
 ## Testes Unitários e Teste de Integração (bônus)
 - `tests/test_text_parser.py` — Teste unitário que valida parser de route/dosage_form.
@@ -131,7 +135,17 @@ Posicionamento: mantivemos o Nível 1 para cumprir o desafio com leveza, reprodu
 Arquivo: `config/text_rules.yaml`
 - Regras de keywords para `routes` (Oral, Intravenous, Subcutaneous, etc.) e `dosage_forms` (Tablet, Injection, Cream, etc.).
 - Aplicado à **description** da intervenção. Se não houver texto, retorna `Unknown`.
-- Cobertura observada em 1000 trials: 1.645 relações Trial–Drug, 79 com route (≈5,0%), 21 com dosage_form (≈1,3%). Limitação documentada: falta de texto rico na fonte.
+
+**Análise Detalhada da Acurácia do Método de Extração de Entidades para 1000 trials:**
+- Total de relações Trial–Drug: 1.645
+- Relações Trial–Drug sem drug description: 1.509 (91,7% do total)
+- Relações Trial–Drug com drug description: 136 (8,3% do total)
+- Das 136 relações Trial–Drug com drug description:
+  - Route inferido: 40 (2,4% do total, 29,4% das que têm description)
+  - Dosage_form inferido: 22 (1,3% do total, 16,2% das que têm description)
+  - Ambos inferidos: 16 (1,0% do total, 11,8% das que têm description)
+
+Esses dados podem ser verificados executando o script de análise: `analyzes_entity_extraction_metrics.py`
 
 
 ## Decisões e Racional
@@ -151,7 +165,6 @@ Arquivo: `config/text_rules.yaml`
 3) **Inferência de route/dosage_form por palavras‑chave (regras)**
    - Alternativas: LLM/NER (maior recall, custo/peso maiores) ou heurísticas simples. Inclui opções gerenciadas como Databricks AI Query, que facilitam mas dependem de cloud, custo e latência.
    - Escolha: regras no `config/text_rules.yaml`, porque são leves, auditáveis e reprodutíveis em ambiente Docker enxuto. Aderem ao espírito do desafio (não construir uma ontologia farmacêutica “perfeita”, mas uma abordagem razoável e documentada).
-   - Limitação: descrições pobres geram `Unknown` (~5,0% rota, ~1,3% forma em 1000 trials). Documentado como risco conhecido. Futuro: NER/LLM (BioBERT/SciSpacy), AI Query gerenciado (ex.: Databricks) ou hints no nome da droga, se aceitarmos custo/complexidade adicionais.
 
 4) **Intervention types: DRUG e BIOLOGICAL**
    - Alternativas: só DRUG (perde vacinas/anticorpos) ou incluir ambos.
@@ -288,12 +301,17 @@ docker compose exec etl python -m unittest -v tests.test_readme_example
 docker compose exec etl python -m unittest -v tests.test_bonus_integration
 ```
 
-4) Acesse Neo4j Browser:
+4) Rode o Script para Verificar as Métricas de Extração de Entidades:
+```
+docker compose exec etl python scripts/analyzes_entity_extraction_metrics.py
+
+```
+5) Acesse Neo4j Browser:
 - URL: http://localhost:7474  
 - User: `neo4j`  
 - Pass: `password`
 
-5) Realize as Consultas de Demonstração Abaixo (também disponíveis em `queries.cypher`):
+6) Realize as Consultas de Demonstração Abaixo (também disponíveis em `queries.cypher`):
 - Top drugs:
 ```
 MATCH (d:Drug)<-[:STUDIED_IN]-(t:Trial)

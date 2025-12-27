@@ -27,7 +27,7 @@ class AACTClient:
             raise
 
 
-    def fetch_trials(self, query_path: str = "config/extract_trials.sql") -> Generator[Dict[str, Any], None, None]:
+    def fetch_trials(self, query_path: str = "config/extract_trials.sql", postgres_fetch_size: int = 100) -> Generator[Dict[str, Any], None, None]:
         if not os.path.exists(query_path):
             raise FileNotFoundError(f"Query file not found at: {query_path}")
 
@@ -46,7 +46,7 @@ class AACTClient:
                 
                 total_fetched = 0
                 while True:
-                    rows = cur.fetchmany(size=500)
+                    rows = cur.fetchmany(size=postgres_fetch_size)
                     if not rows:
                         break
 
