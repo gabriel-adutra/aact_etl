@@ -73,21 +73,34 @@ class BonusIntegrationTest(unittest.TestCase):
         self.logger.info("-" * 80)
         self.logger.info(f"{title}:\n{json.dumps(data, ensure_ascii=False, indent=2)}")
 
+    def _log_e2e_summary(self, raw_batch, cleaned_batch, persisted):
+        raw_json = json.dumps(raw_batch, ensure_ascii=False, indent=2)
+        cleaned_json = json.dumps(cleaned_batch, ensure_ascii=False, indent=2)
+        persisted_json = json.dumps(persisted, ensure_ascii=False, indent=2)
+        
+        self.logger.info("-" * 80)
+        self.logger.info(
+            f"[E2E Real Small Batch]\n"
+            f"  Extracted {len(raw_batch)} records from stream (of many available from AACT)\n{raw_json}\n"
+            f"  Transformed: {len(cleaned_batch)} records\n{cleaned_json}\n"
+            f"  Persisted in Neo4j: {len(cleaned_batch)} trials\n"
+            f"  Query result: {len(persisted)} trial-drug relationship{'s' if len(persisted) != 1 else ''}\n{persisted_json}"
+        )
+
     def test_e2e_real_small_batch(self):
         raw_batch = self._extract_trials(self.MAX_RECORDS)
-        self._log_section(f"Extracted {self.MAX_RECORDS} records from AACT", raw_batch)
         self.assertGreater(len(raw_batch), 0, "No records extracted; check AACT credentials.")
 
         cleaned_batch = self._transform_trials(raw_batch)
-        self._log_section(f"Transformed {self.MAX_RECORDS} records after cleaning and inference", cleaned_batch)
         self.assertEqual(len(cleaned_batch), len(raw_batch))
 
         self._load_trials(cleaned_batch)
 
         nct_ids = [c["nct_id"] for c in cleaned_batch if c.get("nct_id")]
         persisted = self._query_persisted_trials(nct_ids)
-        self._log_section("Persisted entities and relationships in Neo4j", persisted)
         self.assertGreater(len(persisted), 0, "No data found in Neo4j for extracted NCT IDs.")
+        
+        self._log_e2e_summary(raw_batch, cleaned_batch, persisted)
 
 
 if __name__ == "__main__":

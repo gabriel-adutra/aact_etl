@@ -12,10 +12,6 @@ class ReadmeExampleTest(unittest.TestCase):
         cls.logger = logging.getLogger("tests.test_readme_example")
         cls.cleaner = DataCleaner()
 
-    def _log_transformation(self, raw, cleaned):
-        self.logger.info("RAW input (README example):\n%s", json.dumps(raw, ensure_ascii=False, indent=2))
-        self.logger.info("TRANSFORMED output:\n%s", json.dumps(cleaned, ensure_ascii=False, indent=2))
-
     def _project_to_tabular_view(self, cleaned_trial):
         return {
             "trial": cleaned_trial["nct_id"],
@@ -55,7 +51,6 @@ class ReadmeExampleTest(unittest.TestCase):
         }
 
         cleaned = self.cleaner.clean_study(raw)
-        self._log_transformation(raw, cleaned)
         self.assertEqual(cleaned, expected_clean)
 
         table_row = self._project_to_tabular_view(cleaned)
@@ -70,7 +65,13 @@ class ReadmeExampleTest(unittest.TestCase):
         }
 
         self.assertEqual(table_row, expected_table_row)
-        self.logger.info("Projected tabular view (Neo4j-style):\n%s", json.dumps([table_row], ensure_ascii=False, indent=2))
+        
+        raw_json = json.dumps(raw, ensure_ascii=False, indent=2)
+        cleaned_json = json.dumps(cleaned, ensure_ascii=False, indent=2)
+        table_json = json.dumps([table_row], ensure_ascii=False, indent=2)
+        self.logger.info(
+            f"[README example transformation]\n  RAW input:\n{raw_json}\n  TRANSFORMED output:\n{cleaned_json}\n  Projected tabular view (Neo4j-style):\n{table_json}"
+        )
 
 
 if __name__ == "__main__":

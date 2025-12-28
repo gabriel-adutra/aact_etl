@@ -17,9 +17,12 @@ class TestDataCleaner(unittest.TestCase):
         cls.cleaner = DataCleaner()
 
 
-    def _log_transformation(self, raw, cleaned):
-        self.logger.info("Raw input:\n%s", json.dumps(raw, ensure_ascii=False, indent=2))
-        self.logger.info("Cleaned output:\n%s", json.dumps(cleaned, ensure_ascii=False, indent=2))
+    def _log_transformation(self, raw, cleaned, test_name):
+        raw_json = json.dumps(raw, ensure_ascii=False, indent=2)
+        cleaned_json = json.dumps(cleaned, ensure_ascii=False, indent=2)
+        self.logger.info(
+            f"[{test_name}]\n  Raw input:\n{raw_json}\n  Cleaned output:\n{cleaned_json}"
+        )
 
 
     def _find_drug_by_name(self, drugs, name):
@@ -46,7 +49,7 @@ class TestDataCleaner(unittest.TestCase):
         }
 
         cleaned = self.cleaner.clean_study(raw)
-        self._log_transformation(raw, cleaned)
+        self._log_transformation(raw, cleaned, "Clean study with drug and conditions")
 
         self.assertEqual(cleaned["title"], "lung cancer study")
         

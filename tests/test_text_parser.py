@@ -19,8 +19,9 @@ class TestTextParser(unittest.TestCase):
 
     def _log_inference_result(self, input_text, result, test_name):
         input_display = input_text if input_text is not None else "None"
+        result_json = json.dumps(result, ensure_ascii=False, indent=2)
         self.logger.info(
-            f"{test_name} - Input: {input_display}\nResult:\n{json.dumps(result, ensure_ascii=False, indent=2)}"
+            f"[{test_name}]\n  Input: {input_display}\n  Result:\n{result_json}"
         )
 
 
