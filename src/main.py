@@ -26,16 +26,13 @@ def run_etl_pipeline(limit=1000, batch_size=500):
 
     neo4j_client.ensure_graph_schema()
 
-    total_processed = 0
-
     try:
         trials_stream = aact_client.fetch_trials(postgres_fetch_size=100) #just creates a generator of dictionaries. lazy function.
         for clean_batch in batch_cleaned_trials(trials_stream, data_cleaner, batch_size, limit):
             if clean_batch:
                 neo4j_client.load_trials_batch(clean_batch)
-                total_processed += len(clean_batch)
 
-        logger.info(f"Pipeline completed successfully. Total processed: {total_processed}. Next step: open http://localhost:7474, authenticate, and run the queries in queries.cypher to validate the graph.")
+        logger.info(f"Pipeline completed successfully. Next step: open http://localhost:7474, authenticate, and run the queries in queries.cypher to validate the graph.")
 
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")
