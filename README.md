@@ -1,24 +1,24 @@
 # ClinicalTrials.gov → Neo4j (AACT ETL)
 
-## Sobre o Projeto
-Este repositório implementa um pipeline ETL completo, idempotente e conteinerizado que extrai dados clínicos do AACT (PostgreSQL público do ClinicalTrials.gov), transforma e enriquece as informações, e carrega tudo em um grafo Neo4j. O objetivo é oferecer um modelo útil para exploração de:
+## About the Project
+This repository implements a complete, idempotent, and containerized ETL pipeline that extracts clinical data from AACT (ClinicalTrials.gov public PostgreSQL), transforms and enriches the information, and loads everything into a Neo4j graph. The goal is to provide a useful model for exploring:
 
-- Ensaios clínicos (Trial)
-- Drogas/Intervenções (Drug)
-- Condições/Doenças (Condition)
-- Patrocinadores/Organizações (Organization)
-- Via de administração e forma farmacêutica (como propriedades na relação Trial–Drug)
+- Clinical trials (Trial)
+- Drugs/Interventions (Drug)
+- Conditions/Diseases (Condition)
+- Sponsors/Organizations (Organization)
+- Route of administration and dosage form (as properties on the Trial–Drug relationship)
 
-## Arquitetura (Separação de Responsabilidades)
-A arquitetura do pipeline foi desenhada para refletir separação de responsabilidades, configurabilidade e idempotência, alinhada ao que o desafio valoriza (“pipeline bem arquitetado”, “config-driven”, “batching/backpressure”, “idempotent loads”). Essa organização segue a diretriz de “estrutura clara”: cada módulo tem uma única missão (ler, processar, carregar, orquestrar), e as regras/queries ficam em config para facilitar ajustes sem tocar no código.
+## Architecture (Separation of Responsibilities)
+The pipeline architecture was designed to reflect separation of responsibilities, configurability, and idempotency, aligned with what the challenge values ("well-architected pipeline", "config-driven", "batching/backpressure", "idempotent loads"). This organization follows the "clear structure" guideline: each module has a single mission (read, process, load, orchestrate), and rules/queries are kept in config to facilitate adjustments without touching the code.
 
-### Características do Sistema
-- **Batch & Idempotente:** MERGE em todas as entidades. Repetir o ETL não duplica dados.
-- **Config‑driven:** SQL, regras de extração de entidades e variáveis sensíveis em arquivos dedicados.
-- **Leve & Reprodutível:** Rule‑based NLP em vez de LLM/NER pesado. Imagem Docker enxuta.
-- **Resiliente:** Constraints e índices aplicados automaticamente. Logs claros de progresso.
+### System Features
+- **Batch & Idempotent:** MERGE on all entities. Re-running the ETL does not duplicate data.
+- **Config-driven:** SQL, entity extraction rules, and sensitive variables in dedicated files.
+- **Lightweight & Reproducible:** Rule-based NLP instead of heavy LLM/NER. Lean Docker image.
+- **Resilient:** Constraints and indexes applied automatically. Clear progress logs.
 
-## Diagrama (Visão Geral)
+## Diagram (Overview)
 ```mermaid
 graph TD
     subgraph External_Data
@@ -41,7 +41,7 @@ graph TD
     L -->|Cypher MERGE| Neo
 ```
 
-### Módulos principais
+### Main Modules
 
 ```
 .
@@ -80,122 +80,122 @@ graph TD
 └── requirements.txt
 ```
 
-- `config/extract_trials.sql` — Query declarativa de extração (AACT → JSON agregado por estudo).
-- `config/text_rules.yaml` — Regras declarativas de inferência (route/dosage_form) baseadas em palavras‑chave.
-- `src/extract/aact_client.py` — Adapter de leitura AACT (PostgreSQL), streaming em batches.
-- `src/transform/data_cleaner.py` — Normalização de campos e orquestração da limpeza (inclui route/dosage_form em STUDIED_IN).
-- `src/transform/text_parser.py` — Inferência rule‑based de route/dosage_form a partir de texto livre.
-- `src/load/neo4j_client.py` — Adapter de escrita Neo4j (constraints, índices, carga em lote via UNWIND).
-- `src/main.py` — Orquestrador do pipeline (Extract → Transform → Load) com batch e limite configuráveis.
-- `scripts/analyzes_entity_extraction_metrics.py` — Script de análise que extrai dados do AACT, analisa cobertura de drug description, calcula métricas de inferência de route/dosage_form e valida os resultados comparando com Neo4j.
-- `docs`— Contém screenshots do retorno das queries, como solicitado no code challenge.
-- `queries.cypher` — Consultas de demonstração para validação rápida no Neo4j.
+- `config/extract_trials.sql` — Declarative extraction query (AACT → JSON aggregated by study).
+- `config/text_rules.yaml` — Declarative inference rules (route/dosage_form) based on keywords.
+- `src/extract/aact_client.py` — AACT read adapter (PostgreSQL), streaming in batches.
+- `src/transform/data_cleaner.py` — Field normalization and cleaning orchestration (includes route/dosage_form in STUDIED_IN).
+- `src/transform/text_parser.py` — Rule-based inference of route/dosage_form from free text.
+- `src/load/neo4j_client.py` — Neo4j write adapter (constraints, indexes, batch loading via UNWIND).
+- `src/main.py` — Pipeline orchestrator (Extract → Transform → Load) with configurable batch and limit.
+- `scripts/analyzes_entity_extraction_metrics.py` — Analysis script that extracts data from AACT, analyzes drug description coverage, calculates route/dosage_form inference metrics, and validates results by comparing with Neo4j.
+- `docs`— Contains screenshots of query results, as requested in the code challenge.
+- `queries.cypher` — Demonstration queries for quick validation in Neo4j.
 
 
-## Testes Unitários e Teste de Integração (bônus)
-- `tests/test_text_parser.py` — Teste unitário que valida parser de route/dosage_form.
-- `tests/test_data_cleaner.py` — Teste unitário que valida cleaner/normalização dos dados.
-- `tests/test_readme_example.py` — Teste unitário que valida um exemplo descrito nesse README (End to End de um único registro.)
-- `tests/test_bonus_integration.py` — Teste de integração (bônus) que extrai, transforma e carrega um conjunto pequeno de dados no Neo4j
-- Logs de testes mostram batches carregados, progresso e carregamento, úteis para monitorar execução.
+## Unit Tests and Integration Test (bonus)
+- `tests/test_text_parser.py` — Unit test that validates route/dosage_form parser.
+- `tests/test_data_cleaner.py` — Unit test that validates cleaner/data normalization.
+- `tests/test_readme_example.py` — Unit test that validates an example described in this README (End to End of a single record.)
+- `tests/test_bonus_integration.py` — Integration test (bonus) that extracts, transforms, and loads a small dataset into Neo4j
+- Test logs show loaded batches, progress, and loading, useful for monitoring execution.
 
 
-## Como o Sistema Funciona (atendendo aos requisitos funcionais)
+## How the System Works (meeting functional requirements)
 
-1) **Ingestão (query reproduzível, dataset não trivial, estágio clínico)**  
-   - Query versionada em `config/extract_trials.sql`: estudos intervencionais em PHASE1/2/3/4 (inclui PHASE1/PHASE2, PHASE2/PHASE3) e `intervention_type IN ('DRUG','BIOLOGICAL')` (minha definição de “clinical-stage baseada na documentação”).  
-   - Retorna agregado por estudo (`json_agg`) e, por padrão, processa 1000 trials (≥ 500 exigido). Sem binários/dumps: sempre dados atuais do AACT público.
+1) **Ingestion (reproducible query, non-trivial dataset, clinical stage)**  
+   - Versioned query in `config/extract_trials.sql`: interventional studies in PHASE1/2/3/4 (includes PHASE1/PHASE2, PHASE2/PHASE3) and `intervention_type IN ('DRUG','BIOLOGICAL')` (my definition of "clinical-stage based on documentation").  
+   - Returns aggregated by study (`json_agg`) and, by default, processes 1000 trials (≥ 500 required). No binaries/dumps: always current data from public AACT.
 
-2) **Transformação (campos mínimos, normalização, faltantes/duplicatas)**  
-   - Captura: Drug (lista de intervenções), Condition, Organization (sponsor/collaborators), NCT ID, Title, Phase, Status; route/dosage_form se houver texto.  
-   - Normaliza textos (trim/Title Case) e deduplica condições; campos ausentes viram `Unknown` em route/dosage_form em vez de gerar erro; mantém placebo para fidelidade.
+2) **Transformation (minimum fields, normalization, missing/duplicates)**  
+   - Captures: Drug (list of interventions), Condition, Organization (sponsor/collaborators), NCT ID, Title, Phase, Status; route/dosage_form if text is available.  
+   - Normalizes texts (trim/Title Case) and deduplicates conditions; missing fields become `Unknown` in route/dosage_form instead of generating errors; keeps placebo for fidelity.
 
-3) **Modelagem e Carga (grafo, route/dosage_form contextual, idempotência) - Neo4J**  
-   - Nós: Trial, Drug, Condition, Organization.  
-   - Relações: `STUDIED_IN` (propriedades `route`, `dosage_form`), `SPONSORED_BY`, `STUDIES_CONDITION`. route/dosage_form ficam na relação (trial-specific), conforme enunciado.  
-   - Schema garantido no start: constraints de unicidade em nct_id e nomes; índices em phase/status. Carga em lote com `UNWIND + MERGE` (idempotente, sem passos manuais).
+3) **Modeling and Loading (graph, contextual route/dosage_form, idempotency) - Neo4J**  
+   - Nodes: Trial, Drug, Condition, Organization.  
+   - Relationships: `STUDIED_IN` (properties `route`, `dosage_form`), `SPONSORED_BY`, `STUDIES_CONDITION`. route/dosage_form are on the relationship (trial-specific), as per the requirements.  
+   - Schema guaranteed on start: uniqueness constraints on nct_id and names; indexes on phase/status. Batch loading with `UNWIND + MERGE` (idempotent, no manual steps).
 
-4) **Validação (queries obrigatórias)**  
-   - `queries.cypher` traz quatro consultas de validação: (1) top drugs por número de trials; (2) por empresa, listando drogas e condições; (3) por condição, mostrando drogas e fases; (4) cobertura de route/dosage_form.
-
-
-## Deep Dive: O Desafio da Extração de Entidades
-
-A inferência de route e dosage_forma farmacêutica em texto livre do ClinicalTrials.gov é difícil por falta de padronização. A estratégia escolhida é uma linha de base deliberada, priorizando precisão e transparência em detrimento de recall. A “escada” de evolução possível:
-
-- **Nível 1 (atual) — Heurísticas / Keywords (rules):** Baixo custo, comportamento determinístico e fácil auditoria; executa em poucos segundos em ambiente Docker. A cobertura é limitada, pois muitas descrições contêm apenas o nome da droga. Nesse cenário, optamos por retornar `Unknown` em vez de assumir informações e gerar falsos positivos.
-- **Nível 2 — Regex estruturado:** descartado aqui porque as descrições não seguem padrão fixo (ordem de dose/droga varia, texto é esparso).
-- **Nível 3 — NLP biomédico (SciSpacy/BioBERT):** maior recall sem depender de palavras exatas; custo de imagem/build maior e mais dependências.
-- **Nível 4 — LLMs/AI Functions (GPT-4, Llama-3 via Databricks ou local):** melhor assertividade potencial, mas traz custo, latência e requer validação humana (human-in-the-loop) e governança.
-
-Posicionamento: mantivemos o Nível 1 para cumprir o desafio com leveza, reprodutibilidade e clareza. Próximos passos naturais seriam experimentar Nível 3 (modelos biomédicos) ou Nível 4 (LLM) se aceitarmos maior custo/complexidade em troca de maior recall.
+4) **Validation (required queries)**  
+   - `queries.cypher` contains four validation queries: (1) top drugs by number of trials; (2) by company, listing drugs and conditions; (3) by condition, showing drugs and phases; (4) route/dosage_form coverage.
 
 
-## Inferência de route/dosage_form a partir do campo description
-Arquivo: `config/text_rules.yaml`
-- Regras de keywords para `routes` (Oral, Intravenous, Subcutaneous, etc.) e `dosage_forms` (Tablet, Injection, Cream, etc.).
-- Aplicado à **description** da intervenção. Se não houver texto, retorna `Unknown`.
+## Deep Dive: The Entity Extraction Challenge
 
-**Análise Detalhada da Acurácia do Método de Extração de Entidades para 1000 trials:**
-- Total de relações Trial–Drug: 1.645
-- Relações Trial–Drug sem drug description: 1.509 (91,7% do total)
-- Relações Trial–Drug com drug description: 136 (8,3% do total)
-- Das 136 relações Trial–Drug com drug description:
-  - Route inferido: 40 (29,4% das que têm description)
-  - Dosage_form inferido: 22 (16,2% das que têm description)
-  - Ambos inferidos: 16 (11,8% das que têm description)
+Inferring route and dosage form from free text in ClinicalTrials.gov is difficult due to lack of standardization. The chosen strategy is a deliberate baseline, prioritizing precision and transparency over recall. The possible "evolution ladder":
 
-Esses dados podem ser verificados executando o script de análise: `analyzes_entity_extraction_metrics.py`
+- **Level 1 (current) — Heuristics / Keywords (rules):** Low cost, deterministic behavior, and easy auditing; executes in a few seconds in Docker environment. Coverage is limited, as many descriptions contain only the drug name. In this scenario, we choose to return `Unknown` instead of assuming information and generating false positives.
+- **Level 2 — Structured regex:** discarded here because descriptions do not follow a fixed pattern (dose/drug order varies, text is sparse).
+- **Level 3 — Biomedical NLP (SciSpacy/BioBERT):** higher recall without depending on exact words; higher image/build cost and more dependencies.
+- **Level 4 — LLMs/AI Functions (GPT-4, Llama-3 via Databricks or local):** better potential accuracy, but brings cost, latency, and requires human validation (human-in-the-loop) and governance.
+
+Positioning: we maintained Level 1 to fulfill the challenge with lightness, reproducibility, and clarity. Natural next steps would be to experiment with Level 3 (biomedical models) or Level 4 (LLM) if we accept higher cost/complexity in exchange for higher recall.
 
 
-## Decisões e Racional
+## Inference of route/dosage_form from the description field
+File: `config/text_rules.yaml`
+- Keyword rules for `routes` (Oral, Intravenous, Subcutaneous, etc.) and `dosage_forms` (Tablet, Injection, Cream, etc.).
+- Applied to the intervention's **description**. If there is no text, returns `Unknown`.
 
-1) **Fonte AACT direta (Postgres público) vs. dump local (2GB)**
-   - Opções consideradas:
-     - Baixar o dump (2GB), subir um Postgres local e carregar via `pg_restore`.
-     - Montar um container Postgres que baixe e restaure o dump em build.
-     - Conectar direto ao Postgres público do AACT (Playground).
-   - Rejeitamos dump/local porque: aumenta tempo de build, exige versionar/baixar binário grande, e congela dados (perde atualizações).
-   - Escolhemos o Postgres público: é a “fonte oficial”, zero binários versionados, sempre dados atuais e experiência “clone & run” via Docker Compose (apenas credenciais no `.env`).
+**Detailed Analysis of Entity Extraction Method Accuracy for 1000 trials:**
+- Total Trial–Drug relationships: 1,645
+- Trial–Drug relationships without drug description: 1,509 (91.7% of total)
+- Trial–Drug relationships with drug description: 136 (8.3% of total)
+- Of the 136 Trial–Drug relationships with drug description:
+  - Route inferred: 40 (29.4% of those with description)
+  - Dosage_form inferred: 22 (16.2% of those with description)
+  - Both inferred: 16 (11.8% of those with description)
 
-2) **Query relacional → JSON agregado (AACT)**
-   - Alternativas: juntar no Python (mais I/O, mais lógica) ou agregar já no banco.
-   - Escolha: usar `json_agg` no Postgres para devolver 1 linha por estudo com listas de drogas/condições/patrocinadores, reduzindo transferência e evitando reagrupamento manual. Mantém a transformação declarativa e versionada em SQL.
-
-3) **Inferência de route/dosage_form por palavras‑chave (regras)**
-   - Alternativas: LLM/NER (maior recall, custo/peso maiores) ou heurísticas simples. Inclui opções gerenciadas como Databricks AI Query, que facilitam mas dependem de cloud, custo e latência.
-   - Escolha: regras no `config/text_rules.yaml`, porque são leves, auditáveis e reprodutíveis em ambiente Docker enxuto. Aderem ao espírito do desafio (não construir uma ontologia farmacêutica “perfeita”, mas uma abordagem razoável e documentada).
-
-4) **Intervention types: DRUG e BIOLOGICAL**
-   - Alternativas: só DRUG (perde vacinas/anticorpos) ou incluir ambos.
-   - Escolha: incluir DRUG e BIOLOGICAL para cobrir small molecules, vacinas e biológicos, atendendo melhor ao critério “clinical‑stage drugs”.
-   - Documentado para justificar a definição e evitar lacunas nos resultados.
-
-5) **Placebo mantido**
-   - Alternativas: filtrar placebo na extração ou na carga.
-   - Escolha: manter para fidelidade à fonte e para não embutir regra de negócio, facilita auditoria. Se quiser filtrar, é um ajuste simples na SQL.
-
-6) **Sponsors: apenas LEAD (não collaborators)**
-   - Alternativas: capturar todos os sponsors (lead + collaborators) ou apenas lead.
-   - Escolha: capturar apenas sponsors com `lead_or_collaborator = 'lead'` para focar no patrocinador principal do estudo. Isso simplifica o modelo de grafo (apenas relação `SPONSORED_BY`, sem necessidade de `COLLABORATES_WITH`) e reduz ruído de organizações secundárias. O desafio permite "and/or" para essas relações, então `SPONSORED_BY` sozinho atende o requisito mínimo. A propriedade `class` na relação `SPONSORED_BY` vem diretamente do campo `agency_class` da tabela `sponsors` do AACT, preservando a classificação original da fonte.
-
-7) **Normalização de nomes com `.title()`**
-   - Alternativas: pipelines de normalização avançados (sinônimos, stemming) ou manter bruto.
-   - Escolha: `.title()` para reduzir variação trivial com custo baixo. Risco: acrônimos podem ser alterados (dnaJ → Dnaj); limitação registrada. Futuro: lista de exceções/sinônimos se necessário.
+This data can be verified by running the analysis script: `analyzes_entity_extraction_metrics.py`
 
 
-## Consulta de Extração (AACT)
-Arquivo: `config/extract_trials.sql`
-- Filtra **intervention_type IN ('DRUG', 'BIOLOGICAL')** (para cobrir small molecules e biológicos).
-- Fases clínicas: `PHASE1`, `PHASE2`, `PHASE3`, `PHASE4`, `PHASE1/PHASE2`, `PHASE2/PHASE3`.
-- Estudo intervencional: `study_type = 'INTERVENTIONAL'`.
-- Agrupa:
-  - `drugs`: lista de `{name, description}`
-  - `conditions`: lista de nomes
-  - `sponsors`: lista de `{name, class}`
+## Decisions and Rationale
+
+1) **Direct AACT source (public Postgres) vs. local dump (2GB)**
+   - Options considered:
+     - Download the dump (2GB), set up a local Postgres and load via `pg_restore`.
+     - Set up a Postgres container that downloads and restores the dump on build.
+     - Connect directly to AACT public Postgres (Playground).
+   - We rejected dump/local because: increases build time, requires versioning/downloading large binary, and freezes data (loses updates).
+   - We chose public Postgres: it is the "official source", zero versioned binaries, always current data, and "clone & run" experience via Docker Compose (only credentials in `.env`).
+
+2) **Relational query → aggregated JSON (AACT)**
+   - Alternatives: join in Python (more I/O, more logic) or aggregate in the database.
+   - Choice: use `json_agg` in Postgres to return 1 row per study with lists of drugs/conditions/sponsors, reducing transfer and avoiding manual regrouping. Keeps transformation declarative and versioned in SQL.
+
+3) **Route/dosage_form inference via keywords (rules)**
+   - Alternatives: LLM/NER (higher recall, higher cost/weight) or simple heuristics. Includes managed options like Databricks AI Query, which facilitate but depend on cloud, cost, and latency.
+   - Choice: rules in `config/text_rules.yaml`, because they are lightweight, auditable, and reproducible in a lean Docker environment. They adhere to the spirit of the challenge (not building a "perfect" pharmaceutical ontology, but a reasonable and documented approach).
+
+4) **Intervention types: DRUG and BIOLOGICAL**
+   - Alternatives: only DRUG (loses vaccines/antibodies) or include both.
+   - Choice: include DRUG and BIOLOGICAL to cover small molecules, vaccines, and biologics, better meeting the "clinical-stage drugs" criterion.
+   - Documented to justify the definition and avoid gaps in results.
+
+5) **Placebo kept**
+   - Alternatives: filter placebo in extraction or loading.
+   - Choice: keep for fidelity to source and to not embed business rule, facilitates auditing. If you want to filter, it's a simple SQL adjustment.
+
+6) **Sponsors: LEAD only (not collaborators)**
+   - Alternatives: capture all sponsors (lead + collaborators) or only lead.
+   - Choice: capture only sponsors with `lead_or_collaborator = 'lead'` to focus on the study's main sponsor. This simplifies the graph model (only `SPONSORED_BY` relationship, without need for `COLLABORATES_WITH`) and reduces noise from secondary organizations. The challenge allows "and/or" for these relationships, so `SPONSORED_BY` alone meets the minimum requirement. The `class` property on the `SPONSORED_BY` relationship comes directly from the `agency_class` field of the `sponsors` table in AACT, preserving the original source classification.
+
+7) **Name normalization with `.title()`**
+   - Alternatives: advanced normalization pipelines (synonyms, stemming) or keep raw.
+   - Choice: `.title()` to reduce trivial variation with low cost. Risk: acronyms may be altered (dnaJ → Dnaj); limitation recorded. Future: list of exceptions/synonyms if needed.
 
 
-## Exemplo do README: Esse exemplo está escrito como o teste unitário `tests/test_readme_example.py`
+## Extraction Query (AACT)
+File: `config/extract_trials.sql`
+- Filters **intervention_type IN ('DRUG', 'BIOLOGICAL')** (to cover small molecules and biologics).
+- Clinical phases: `PHASE1`, `PHASE2`, `PHASE3`, `PHASE4`, `PHASE1/PHASE2`, `PHASE2/PHASE3`.
+- Interventional study: `study_type = 'INTERVENTIONAL'`.
+- Groups:
+  - `drugs`: list of `{name, description}`
+  - `conditions`: list of names
+  - `sponsors`: list of `{name, class}`
+
+
+## README Example: This example is written as the unit test `tests/test_readme_example.py`
 
 Extract:
 ```
@@ -231,7 +231,7 @@ Transform:
 }
 ```
 
-Load - Exemplo de projeção tabular do grafo no Neo4j Browser
+Load - Example of tabular projection of the graph in Neo4j Browser
 ```
 MATCH (t:Trial {nct_id:"NCT00000102"})
 OPTIONAL MATCH (t)<-[r:STUDIED_IN]-(d:Drug)
@@ -253,69 +253,69 @@ RETURN t.nct_id AS trial,
 ```
 
 
-## Modelo de Grafo (Neo4j)
-- Nós: Trial (chave `nct_id`), Drug (`name`), Condition (`name`), Organization (`name`).
-- Relações: Trial–Drug via STUDIED_IN (com propriedades `route` e `dosage_form` quando conhecidas); Trial–Condition via STUDIES_CONDITION; Trial–Organization via SPONSORED_BY (propriedade `class` quando conhecida).
-- Constraints/Índices: unicidade em `nct_id` de Trial e nomes de Drug/Condition/Organization; índices em `Trial.phase` e `Trial.status`.
+## Graph Model (Neo4j)
+- Nodes: Trial (key `nct_id`), Drug (`name`), Condition (`name`), Organization (`name`).
+- Relationships: Trial–Drug via STUDIED_IN (with properties `route` and `dosage_form` when known); Trial–Condition via STUDIES_CONDITION; Trial–Organization via SPONSORED_BY (`class` property when known).
+- Constraints/Indexes: uniqueness on Trial's `nct_id` and names of Drug/Condition/Organization; indexes on `Trial.phase` and `Trial.status`.
 
 
-## Pré-requisitos
+## Prerequisites
 - Docker + Docker Compose.
-- Crie uma conta AACT para usar as credenciais Postgres (criar em https://aact.ctti-clinicaltrials.org/).
+- Create an AACT account to use Postgres credentials (create at https://aact.ctti-clinicaltrials.org/).
 
-Insira suas credenciais nos campos AACT_USER e AACT_PASSWORD do `.env`:
+Insert your credentials in the AACT_USER and AACT_PASSWORD fields of `.env`:
 ```
 AACT_HOST=aact-db.ctti-clinicaltrials.org
 AACT_PORT=5432
 AACT_DB=aact
-AACT_USER=<SEU_USUARIO>
-AACT_PASSWORD=<SUA_SENHA>
+AACT_USER=<YOUR_USER>
+AACT_PASSWORD=<YOUR_PASSWORD>
 
 NEO4J_URI=bolt://neo4j:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=password
 ```
 
-## Como Rodar (End-to-End)
-1) Build e suba os dois serviços (Neo4j e ETL) em ambiente limpo:
+## How to Run (End-to-End)
+1) Build and start both services (Neo4j and ETL) in a clean environment:
 ```
 docker compose up --build -d
 ```
-2) Execute o pipeline ETL (default: 1000 estudos, batch=500):
+2) Execute the ETL pipeline (default: 1000 studies, batch=500):
 ```
 docker compose exec etl python src/main.py
 ```
 
-3) Rode os Testes Unitários e de Integração:
+3) Run Unit Tests and Integration Test:
 
-- Apenas o test_text_parser:
+- Only test_text_parser:
 ```
 docker compose exec etl python -m unittest -v tests.test_text_parser
 ```
-- Apenas o test_data_cleaner:
+- Only test_data_cleaner:
 ```
 docker compose exec etl python -m unittest -v tests.test_data_cleaner
 ```
-- Apenas o test_readme_example (end to end de um registro):
+- Only test_readme_example (end to end of a single record):
 ```
 docker compose exec etl python -m unittest -v tests.test_readme_example
 ```
-- Apenas o teste de integração test_bonus_integration.py:
+- Only the integration test test_bonus_integration.py:
 ```
 docker compose exec etl python -m unittest -v tests.test_bonus_integration
 ```
 
-4) Rode o Script para Verificar as Métricas de Extração de Entidades:
+4) Run the Script to Verify Entity Extraction Metrics:
 ```
 docker compose exec etl python scripts/analyzes_entity_extraction_metrics.py
 
 ```
-5) Acesse Neo4j Browser:
+5) Access Neo4j Browser:
 - URL: http://localhost:7474  
 - User: `neo4j`  
 - Pass: `password`
 
-6) Realize as Consultas de Demonstração Abaixo (prontas para copiar/colar no Neo4j Browser) O arquivo `queries.cypher` contém versões parametrizadas para uso programático:
+6) Run the Demonstration Queries Below (ready to copy/paste in Neo4j Browser) The file `queries.cypher` contains parameterized versions for programmatic use:
 - Top drugs:
 ```
 MATCH (d:Drug)<-[:STUDIED_IN]-(t:Trial)
@@ -323,20 +323,20 @@ RETURN d.name AS drug, count(t) AS trials
 ORDER BY trials DESC
 LIMIT 10;
 ```
-- Por empresa (ex.: Novartis):
+- By company (e.g., Novartis):
 ```
 MATCH (o:Organization {name: "Novartis"})<-[:SPONSORED_BY]-(t:Trial)
 OPTIONAL MATCH (t)-[:STUDIED_IN]->(d:Drug)
 OPTIONAL MATCH (t)-[:STUDIES_CONDITION]->(c:Condition)
 RETURN o.name, collect(DISTINCT d.name) AS drugs, collect(DISTINCT c.name) AS conditions;
 ```
-- Por condição (ex.: Alzheimer Disease):
+- By condition (e.g., Alzheimer Disease):
 ```
 MATCH (c:Condition {name: "Alzheimer Disease"})<-[:STUDIES_CONDITION]-(t:Trial)-[:STUDIED_IN]->(d:Drug)
 RETURN d.name AS drug, collect(DISTINCT t.phase) AS phases, count(DISTINCT t) AS trial_count
 ORDER BY trial_count DESC;
 ```
-- Cobertura rota/dosagem:
+- Route/dosage coverage:
 ```
 MATCH ()-[r:STUDIED_IN]->()
 RETURN
@@ -345,38 +345,37 @@ RETURN
   SUM(CASE WHEN r.dosage_form IS NOT NULL AND r.dosage_form <> "Unknown" THEN 1 ELSE 0 END) AS with_dosage_form;
 ```
 
-## Exemplos de Resultados em Screenshot. Saídas baseadas nas queries do Neo4j citadas acima.
+## Example Results in Screenshots. Outputs based on the Neo4j queries mentioned above.
 
 - Top drugs:
 ![](docs/topDrugs.png)
 
-- Por empresa (ex.: Novartis):
+- By company (e.g., Novartis):
 ![](docs/byCompany_Novartis.png)
 
-- Por condição (ex.: Alzheimer’s disease):
+- By condition (e.g., Alzheimer's disease):
 ![](docs/byCondition_Alzheimers.png)
 
-- Cobertura de route/dosage_form:
+- Route/dosage_form coverage:
 ![](docs/route_dosage_form_coverage.png)
 
 
-## Decisões e Trade-offs
-- **AACT direto (Postgres público)** em vez de dump local de 2GB: zero dependência de arquivo gigante e experiência “clone & run”.
-- **Query relacional → JSON aninhado (json_agg)**: o Postgres já agrupa drogas/condições/patrocinadores por estudo, evitando lógica de reagrupamento no Python.
-- **Inferência de rota/dosagem via regras (regex/keyword)**:
-  - Vantagem: leve, reprodutível offline, explica cada decisão.
-  - Limitação: acurácia limitada do método rule-based. Das 136 relações Trial–Drug com drug description (8,3% do total), conseguimos inferir route em apenas 29,4% delas, dosage_form em 16,2%, e ambos em 11,8%. Isso ocorre porque as descrições frequentemente não contêm as keywords exatas definidas em `text_rules.yaml`, ou usam variações linguísticas não cobertas pelas regras. Melhorias futuras: usar NER especializado (BioBERT, SciSpacy) ou LLMs com fine-tuning em textos farmacêuticos para maior recall, aceitando o trade-off de maior complexidade e custo computacional.
-- **Por que não Databricks/LLM/Spacy pesado?**
-  - Overkill para o escopo; aumenta dependência externa, custo e latência.
-  - Repositório e imagem Docker mais enxutos; foco em clareza e reprodutibilidade.
-  - Documentamos a limitação e o caminho de melhoria (usar NER/LLM no futuro).
-- **Placebo como droga:** Mantido conforme fonte; decisão de negócio poderia filtrar, mas preservamos fidelidade aos dados.
-- **Normalização de nomes:** `.title()` pode simplificar acrônimos (ex: dnaJ → Dnaj). Documentado como limitação aceitável.
+## Decisions and Trade-offs
+- **Direct AACT (public Postgres)** instead of local 2GB dump: zero dependency on large file and "clone & run" experience.
+- **Relational query → nested JSON (json_agg)**: Postgres already groups drugs/conditions/sponsors by study, avoiding regrouping logic in Python.
+- **Route/dosage inference via rules (regex/keyword)**:
+  - Advantage: lightweight, reproducible offline, explains each decision.
+  - Limitation: limited accuracy of the rule-based method. Of the 136 Trial–Drug relationships with drug description (8.3% of total), we were able to infer route in only 29.4% of them, dosage_form in 16.2%, and both in 11.8%. This occurs because descriptions frequently do not contain the exact keywords defined in `text_rules.yaml`, or use linguistic variations not covered by the rules. Future improvements: use specialized NER (BioBERT, SciSpacy) or LLMs with fine-tuning on pharmaceutical texts for higher recall, accepting the trade-off of higher complexity and computational cost.
+- **Why not Databricks/LLM/Heavy Spacy?**
+  - Overkill for the scope; increases external dependency, cost, and latency.
+  - Repository and Docker image more lean; focus on clarity and reproducibility.
+  - We document the limitation and the improvement path (use NER/LLM in the future).
+- **Placebo as drug:** Kept as per source; business decision could filter, but we preserve data fidelity.
+- **Name normalization:** `.title()` may simplify acronyms (e.g., dnaJ → Dnaj). Documented as acceptable limitation.
 
 
-## Próximos Passos (se houvesse mais tempo)
-- NER/LLM (BioBERT/SciSpacy) para melhorar acurácia na extração de entidades route/dosage_form.
-- Métricas automáticas (nós/arestas criados, coverage de campos).
-- Ingestão incremental e orquestração (Airflow).
-
+## Next Steps (if there were more time)
+- NER/LLM (BioBERT/SciSpacy) to improve accuracy in route/dosage_form entity extraction.
+- Automatic metrics (nodes/edges created, field coverage).
+- Incremental ingestion and orchestration (Airflow).
 
