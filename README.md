@@ -274,8 +274,8 @@ git clone https://github.com/gabriel-adutra/aact_etl.git && cd aact_etl
 AACT_HOST=aact-db.ctti-clinicaltrials.org
 AACT_PORT=5432
 AACT_DB=aact
-AACT_USER=<YOUR_USER>
-AACT_PASSWORD=<YOUR_PASSWORD>
+AACT_USER=<YOUR_USERNAME_AACT>
+AACT_PASSWORD=<YOUR_PASSWORD_AACT>
 
 NEO4J_URI=bolt://neo4j:7687
 NEO4J_USER=neo4j
