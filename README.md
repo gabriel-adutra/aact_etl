@@ -266,8 +266,7 @@ RETURN t.nct_id AS trial,
 ## Setup
 1. Clone the repository and navigate to the project directory:
 ```bash
-git clone https://github.com/gabriel-adutra/aact_etl.git
-cd aact_etl
+git clone https://github.com/gabriel-adutra/aact_etl.git && cd aact_etl
 ```
 
 2. Insert your credentials in the AACT_USER and AACT_PASSWORD fields of `.env`:
