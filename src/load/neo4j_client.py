@@ -1,12 +1,15 @@
 import os
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
 from neo4j import GraphDatabase
+
+if TYPE_CHECKING:
+    from neo4j import Driver
 
 logger = logging.getLogger(__name__)
 
 class Neo4jClient:
-    def __init__(self):
+    def __init__(self) -> None:
         uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
         user = os.getenv("NEO4J_USER", "neo4j")
         password = os.getenv("NEO4J_PASSWORD", "password")
@@ -14,7 +17,7 @@ class Neo4jClient:
         self.driver = self._create_driver(uri, user, password)
         
 
-    def _create_driver(self, uri: str, user: str, password: str):
+    def _create_driver(self, uri: str, user: str, password: str) -> "Driver":
         try:
             driver = GraphDatabase.driver(uri, auth=(user, password))
             driver.verify_connectivity()
@@ -25,12 +28,12 @@ class Neo4jClient:
             raise
         
 
-    def close_connection(self):
+    def close_connection(self) -> None:
         if self.driver:
             self.driver.close()
 
 
-    def ensure_graph_schema(self):
+    def ensure_graph_schema(self) -> None:
         logger.info("Ensuring Neo4j schema. Constraints and indexes created only if missing (idempotent).")
         queries = [
             # Constraints (Uniqueness)
@@ -54,7 +57,7 @@ class Neo4jClient:
                     raise
                     
 
-    def load_trials_batch(self, batch: List[Dict[str, Any]]):
+    def load_trials_batch(self, batch: List[Dict[str, Any]]) -> None:
         if not batch:
             return
 

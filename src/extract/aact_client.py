@@ -1,15 +1,18 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from typing import Generator, Dict, Any
+from typing import Generator, Dict, Any, TYPE_CHECKING
 import logging
+
+if TYPE_CHECKING:
+    from psycopg2.extensions import connection
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class AACTClient:
-    def __init__(self):
+    def __init__(self) -> None:
         self.conn_params = {
             "host": os.getenv("AACT_HOST"),
             "port": os.getenv("AACT_PORT"),
@@ -19,7 +22,7 @@ class AACTClient:
         }
 
         
-    def _get_connection(self):
+    def _get_connection(self) -> "connection":
         try:
             return psycopg2.connect(**self.conn_params)
         except Exception as e:

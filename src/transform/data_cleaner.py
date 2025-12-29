@@ -1,11 +1,11 @@
-from typing import Dict, Any
+from typing import Dict, Any, Generator, List
 import logging
 from .text_parser import TextParser
 
 logger = logging.getLogger(__name__)
 
 class DataCleaner:
-    def __init__(self):
+    def __init__(self) -> None:
         self.parser = TextParser()
 
 
@@ -74,7 +74,7 @@ class DataCleaner:
 
 
 # TODO:Ideally, this batching helper should be moved to a dedicated module (e.g., transform/batching.py), keeping data_cleaner focused exclusively on data cleaning, while the orchestration of cleaning and batch processing would live in a separate module. However, for this code challenge, I chose to keep the helper in this file, since the transform/batching.py module would contain only this single function, which would merely increase the number of files without providing meaningful benefits to the current pipeline structure.
-def batch_cleaned_trials(trials_stream, data_cleaner: DataCleaner, batch_size: int, limit: int):
+def batch_cleaned_trials(trials_stream: Generator[Dict[str, Any], None, None], data_cleaner: DataCleaner, batch_size: int, limit: int) -> Generator[List[Dict[str, Any]], None, None]:
     batch = []
     processed = 0
 
